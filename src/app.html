@@ -1,0 +1,534 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#05070a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Genie">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; worker-src 'self'">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<title>AXIS · Genie MVP</title>
+<style>
+:root{--bg:#05070a;--panel:#0c1016;--line:#1a212b;--text:#d7dde5;--dim:#6b7280;
+--blue:#3b82f6;--gold:#e8b923;--white:#f5f7fa;--red:#ef4444;--grey:#5b6370}
+*{box-sizing:border-box}html,body{margin:0;background:var(--bg);color:var(--text);
+font:14px/1.4 -apple-system,BlinkMacSystemFont,"SF Pro Text",system-ui,sans-serif;-webkit-text-size-adjust:100%}
+body{padding:env(safe-area-inset-top) 12px calc(env(safe-area-inset-bottom) + 16px)}
+header{display:flex;align-items:center;gap:12px;padding:12px 0 4px}
+#orb{width:72px;height:72px;flex:none}
+h1{font-size:15px;font-weight:600;margin:0;letter-spacing:.04em}
+#mode{font-size:12px;color:var(--dim)}
+.row{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}
+button{flex:1 1 auto;min-height:44px;border-radius:10px;border:1px solid var(--line);background:var(--panel);
+color:var(--text);font:inherit;padding:8px 10px}
+button.primary{background:var(--blue);border-color:var(--blue);color:#fff;font-weight:600}
+button.danger{color:var(--red);border-color:#3a1a1a}
+button:active{opacity:.7}
+section{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin:10px 0}
+section h2{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--dim);margin:0 0 6px;font-weight:600}
+#spark{width:100%;height:90px;display:block}
+.readouts{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;font-variant-numeric:tabular-nums}
+.readouts div{font-size:12px;color:var(--dim)}.readouts b{display:block;color:var(--text);font-size:15px;font-weight:500}
+ul{list-style:none;margin:0;padding:0}
+.s{display:flex;align-items:center;gap:8px;padding:5px 0;border-top:1px solid var(--line);font-size:13px}
+.s:first-child{border-top:0}
+.dot{width:9px;height:9px;border-radius:50%;flex:none;background:var(--grey)}
+.st-active .dot{background:var(--blue);box-shadow:0 0 6px var(--blue)}
+.st-available .dot{background:transparent;border:1.5px solid var(--white)}
+.st-denied .dot,.st-error .dot{background:var(--red)}
+.st-unsupported .dot{background:#2a3038}
+.st-stale .dot{background:var(--grey)}
+.s .name{flex:1}.s .val{color:var(--dim);font-size:12px;text-align:right;font-variant-numeric:tabular-nums}
+.s.st-unsupported{color:var(--dim)}
+.e{border-top:1px solid var(--line);padding:6px 0;font-size:12.5px}
+.e summary{list-style:none;display:flex;gap:6px;align-items:baseline;cursor:pointer}
+.e summary::-webkit-details-marker{display:none}
+.tag{font-size:10px;letter-spacing:.06em;padding:1px 5px;border-radius:4px;border:1px solid currentColor;flex:none}
+.c-OBSERVED{color:var(--blue)}.c-DERIVED{color:#9fb4d0}.c-INFERRED{color:var(--white)}.c-SPECULATIVE{color:#b58cf0}.c-UNKNOWN{color:var(--dim)}
+.e .sum{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.e.stale,.e.expired,.e.superseded{opacity:.5}
+.e.verified .sum::after{content:" ✓ replay";color:var(--gold)}
+.e pre{white-space:pre-wrap;word-break:break-all;font-size:11px;color:var(--dim);max-height:260px;overflow:auto;margin:6px 0 0}
+#banner{font-size:13px;min-height:1.4em;margin:6px 0}
+#banner.attn{color:var(--white)}#banner.ok{color:var(--gold)}#banner.err{color:var(--red)}#banner.info{color:var(--dim)}
+.interp{font-size:13px}.interp .h{color:var(--white);font-size:15px}.interp .alt{color:var(--dim);font-size:12px}
+.conf{display:inline-block;height:4px;background:var(--white);border-radius:2px;vertical-align:middle;margin-left:6px}
+small{color:var(--dim)}
+input[type=file]{display:none}
+</style>
+</head>
+<body>
+<header>
+  <canvas id="orb" width="144" height="144" aria-label="state glyph"></canvas>
+  <div><h1>AXIS · GENIE MVP</h1><div id="mode">idle · nothing leaves this device</div></div>
+</header>
+
+<div class="row">
+  <button id="wake" class="primary">Wake sensors</button>
+  <button id="snap">Snapshot</button>
+  <button id="sim">Simulate drop</button>
+</div>
+<div id="banner" class="info">Tap “Wake sensors”. iOS asks for Motion, Location, Microphone and Camera.</div>
+
+<section>
+  <h2>Motion |a| (g) · free-fall &lt; <span id="pff"></span> · impact ≥ <span id="pim"></span></h2>
+  <canvas id="spark" width="600" height="180"></canvas>
+  <div class="readouts">
+    <div>|a|<b id="r-g">–</b></div><div>heading<b id="r-h">–</b></div><div>sound<b id="r-db">–</b></div>
+    <div>light<b id="r-lux">–</b></div><div>location<b id="r-geo">–</b></div><div>buffer<b id="r-buf">0</b></div>
+  </div>
+</section>
+
+<section id="last" hidden><h2>Latest interpretation</h2><div class="interp" id="interp"></div></section>
+
+<section><h2>Sensors</h2><ul id="sensors"></ul></section>
+
+<section>
+  <h2>Ledger · <span id="lcount">0</span> entries · head <span id="lhead">–</span></h2>
+  <div class="row">
+    <button id="replay">Replay</button><button id="verify">Verify chain</button><button id="fw">Test firewall</button>
+  </div>
+  <div id="ledger"></div>
+  <div class="row">
+    <button id="export">Export JSON</button><button id="importBtn">Import JSON</button><input type="file" id="import" accept="application/json,.json">
+    <button id="wipe" class="danger">Delete all</button>
+  </div>
+  <small id="receipt"></small>
+</section>
+<small>Glyph: <span style="color:var(--blue)">blue</span> sensing · <span style="color:var(--gold)">gold</span> verified · <span style="color:var(--white)">white</span> attention · <span style="color:var(--red)">red</span> exception · <span style="color:var(--grey)">grey</span> stale/idle. v<span id="ver"></span></small>
+
+<video id="cam" playsinline muted autoplay style="display:none"></video>
+
+<script>
+/*__CORE__*/
+</script>
+<script>
+(function () {
+'use strict';
+var C = window.GenieCore, P = C.DEFAULT_PARAMS;
+var $ = function (s) { return document.querySelector(s); };
+var now = function () { return Date.now(); };
+var S = {
+  running: false, buf: new C.RingBuffer(4096), processed: {}, ledger: null, verified: {},
+  latest: {}, glyph: { state: 'idle', until: 0 }, streams: [], audio: null, timers: []
+};
+window.__genie = S; // for debugging / headless smoke test
+
+// ------------------------------------------------------------ glyph
+var GLYPH = { blue: '#3b82f6', gold: '#e8b923', white: '#f5f7fa', red: '#ef4444', grey: '#5b6370' };
+function flash(state, ms) { S.glyph = { state: state, until: now() + (ms || 2500) }; }
+function glyphColor() {
+  if (S.glyph.until > now()) return GLYPH[S.glyph.state];
+  if (!S.running) return GLYPH.grey;
+  var l = S.buf.last();
+  if (!l || now() - l.t > 3000) return GLYPH.grey; // stale: motion data stopped
+  return GLYPH.blue;
+}
+function drawOrb() {
+  var c = $('#orb'), x = c.getContext('2d'), w = c.width, col = glyphColor(), l = S.buf.last();
+  var g = l ? C.magG(l) : 1, pulse = S.running ? Math.min(1, Math.abs(g - 1)) : 0;
+  x.clearRect(0, 0, w, w);
+  x.beginPath(); x.arc(w / 2, w / 2, w * 0.3 + pulse * w * 0.12, 0, 7);
+  x.strokeStyle = col; x.lineWidth = 6; x.shadowColor = col; x.shadowBlur = 18; x.stroke();
+  x.beginPath(); x.arc(w / 2, w / 2, w * 0.1, 0, 7); x.fillStyle = col; x.fill();
+}
+function drawSpark() {
+  var c = $('#spark'), x = c.getContext('2d'), W = c.width, H = c.height;
+  var a = S.buf.toArray().slice(-360), max = 4;
+  x.clearRect(0, 0, W, H);
+  var y = function (g) { return H - Math.min(g, max) / max * H; };
+  x.strokeStyle = '#3a1a1a'; x.lineWidth = 1; x.beginPath(); x.moveTo(0, y(P.impactG)); x.lineTo(W, y(P.impactG)); x.stroke();
+  x.strokeStyle = '#1d2a40'; x.beginPath(); x.moveTo(0, y(P.freefallG)); x.lineTo(W, y(P.freefallG)); x.stroke();
+  x.strokeStyle = '#222a35'; x.beginPath(); x.moveTo(0, y(1)); x.lineTo(W, y(1)); x.stroke();
+  if (a.length < 2) return;
+  x.strokeStyle = glyphColor(); x.lineWidth = 2; x.beginPath();
+  a.forEach(function (s, i) { var px = i / 359 * W; i ? x.lineTo(px, y(C.magG(s))) : x.moveTo(px, y(C.magG(s))); });
+  x.stroke();
+}
+function frame() { drawOrb(); drawSpark(); requestAnimationFrame(frame); }
+
+function banner(msg, cls) { var b = $('#banner'); b.textContent = msg; b.className = cls || 'info'; }
+function exception(msg) { banner(msg, 'err'); flash('red', 4000); console.warn(msg); }
+
+// ------------------------------------------------------------ sensor registry
+var SENSORS = [
+  { k: 'accel', n: 'Accelerometer (DeviceMotion)' }, { k: 'gyro', n: 'Gyroscope (rotationRate)' },
+  { k: 'orient', n: 'Orientation (alpha/beta/gamma)' }, { k: 'compass', n: 'Compass (webkitCompassHeading)' },
+  { k: 'geo', n: 'Geolocation (GPS/Wi-Fi)' }, { k: 'mic', n: 'Microphone level (AnalyserNode)' },
+  { k: 'cam', n: 'Camera brightness' }, { k: 'battery', n: 'Battery (getBattery)' },
+  { k: 'screen', n: 'Screen orientation' }, { k: 'visibility', n: 'Page visibility' },
+  { k: 'network', n: 'Network (onLine / connection)' }, { k: 'touch', n: 'Touch (force on 3D Touch only)' },
+  { k: 'storage', n: 'Storage quota / persistence' }, { k: 'clock', n: 'High-res clock' },
+  { k: 'ambient', n: 'Ambient light sensor API' }, { k: 'magneto', n: 'Magnetometer (Generic Sensor)' },
+  { k: 'baro', n: 'Barometer / altimeter' }, { k: 'prox', n: 'Proximity' },
+  { k: 'vibrate', n: 'Vibration (actuator)' }, { k: 'nfc', n: 'Web NFC' }, { k: 'bt', n: 'Web Bluetooth' }
+];
+var ST = {}; // k -> {status, val, t}
+function setS(k, status, val) { var o = ST[k] || (ST[k] = {}); if (status) o.status = status; if (val !== undefined) { o.val = val; o.t = now(); } }
+function probe() {
+  var w = window, n = navigator;
+  var dm = 'DeviceMotionEvent' in w, dorient = 'DeviceOrientationEvent' in w;
+  setS('accel', dm ? 'available' : 'unsupported'); setS('gyro', dm ? 'available' : 'unsupported');
+  setS('orient', dorient ? 'available' : 'unsupported'); setS('compass', dorient ? 'available' : 'unsupported');
+  setS('geo', 'geolocation' in n ? 'available' : 'unsupported');
+  var gum = !!(n.mediaDevices && n.mediaDevices.getUserMedia);
+  setS('mic', gum && (w.AudioContext || w.webkitAudioContext) ? 'available' : 'unsupported'); setS('cam', gum ? 'available' : 'unsupported');
+  setS('battery', n.getBattery ? 'available' : 'unsupported');
+  setS('screen', screen.orientation ? 'active' : 'unsupported', screen.orientation ? screen.orientation.type : undefined);
+  setS('visibility', 'active', document.visibilityState);
+  setS('network', 'active', (n.onLine ? 'online' : 'offline') + (n.connection && n.connection.effectiveType ? ' · ' + n.connection.effectiveType : ''));
+  setS('touch', 'ontouchstart' in w ? 'available' : 'unsupported');
+  setS('storage', n.storage && n.storage.estimate ? 'available' : 'unsupported');
+  setS('clock', 'active', 'performance.now');
+  setS('ambient', 'AmbientLightSensor' in w ? 'available' : 'unsupported');
+  setS('magneto', 'Magnetometer' in w ? 'available' : 'unsupported');
+  setS('baro', 'unsupported'); // no web API exists
+  setS('prox', 'ondeviceproximity' in w ? 'available' : 'unsupported');
+  setS('vibrate', n.vibrate ? 'available' : 'unsupported');
+  setS('nfc', 'NDEFReader' in w ? 'available' : 'unsupported');
+  setS('bt', n.bluetooth ? 'available' : 'unsupported');
+  if (!isSecureContext) ['accel', 'gyro', 'orient', 'compass', 'geo', 'mic', 'cam'].forEach(function (k) { setS(k, 'error', 'needs HTTPS'); });
+  document.addEventListener('visibilitychange', function () { setS('visibility', 'active', document.visibilityState); });
+  addEventListener('online', function () { setS('network', 'active', 'online'); });
+  addEventListener('offline', function () { setS('network', 'active', 'offline'); });
+  addEventListener('touchstart', function (e) { var f = e.touches[0] && e.touches[0].force; setS('touch', 'active', 'force ' + (f == null ? 'n/a' : f.toFixed(2))); }, { passive: true });
+  if (screen.orientation) screen.orientation.addEventListener('change', function () { setS('screen', 'active', screen.orientation.type); });
+}
+function renderSensors() {
+  var t = now();
+  $('#sensors').innerHTML = SENSORS.map(function (s) {
+    var o = ST[s.k] || { status: 'unsupported' }, st = o.status;
+    if (st === 'active' && o.t && t - o.t > 3000 && ['accel', 'gyro', 'orient', 'compass', 'mic', 'cam'].indexOf(s.k) >= 0) st = 'stale';
+    var label = { active: 'active', available: 'not started', denied: 'denied', unsupported: 'unsupported', error: 'error', stale: 'stale' }[st];
+    return '<li class="s st-' + st + '" data-k="' + s.k + '" data-status="' + st + '"><span class="dot"></span><span class="name">' + s.n +
+      '</span><span class="val">' + esc(o.val != null && st !== 'unsupported' ? String(o.val) : label) + '</span></li>';
+  }).join('');
+}
+function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+
+// ------------------------------------------------------------ sensor handlers
+function tsOf(e) { return C.round(performance.timeOrigin + (e && e.timeStamp ? e.timeStamp : performance.now()), 3); }
+function onMotion(e) {
+  var g = e.accelerationIncludingGravity; if (!g || g.x == null) return;
+  var r = e.rotationRate || {};
+  var s = { t: tsOf(e), ax: C.round(g.x), ay: C.round(g.y), az: C.round(g.z) };
+  if (r.alpha != null) { s.rx = C.round(r.alpha); s.ry = C.round(r.beta); s.rz = C.round(r.gamma); setS('gyro', 'active', Math.hypot(s.rx, s.ry, s.rz).toFixed(0) + ' °/s'); }
+  var last = S.buf.last(); if (last && s.t <= last.t) return; // keep strictly increasing timestamps
+  S.buf.push(s);
+  var mg = C.magG(s); S.latest.g = mg;
+  setS('accel', 'active', mg.toFixed(2) + ' g · ' + (e.interval ? Math.round(1000 / (e.interval > 1 ? e.interval : e.interval * 1000)) + ' Hz' : ''));
+}
+function onOrient(e) {
+  if (e.alpha == null && e.webkitCompassHeading == null) return;
+  setS('orient', 'active', [e.alpha, e.beta, e.gamma].map(function (v) { return v == null ? '–' : Math.round(v); }).join('/'));
+  if (e.webkitCompassHeading != null) {
+    S.latest.heading = { deg: C.round(e.webkitCompassHeading, 1), acc: e.webkitCompassAccuracy, t: tsOf(e) };
+    setS('compass', 'active', Math.round(e.webkitCompassHeading) + '° ±' + Math.round(e.webkitCompassAccuracy));
+  } else if (e.absolute && e.alpha != null) {
+    S.latest.heading = { deg: C.round((360 - e.alpha) % 360, 1), acc: null, t: tsOf(e) };
+    setS('compass', 'active', Math.round(S.latest.heading.deg) + '° (absolute alpha)');
+  } else if (ST.compass.status !== 'active') setS('compass', 'available', 'no heading field');
+}
+
+function startMotion(permMotion, permOrient) {
+  return Promise.all([permMotion, permOrient]).then(function (res) {
+    var m = res[0], o = res[1];
+    if (m === 'granted') { addEventListener('devicemotion', onMotion); setS('accel', 'active', 'waiting…'); setS('gyro', 'active', 'waiting…'); }
+    else { setS('accel', 'denied', m); setS('gyro', 'denied', m); }
+    if (o === 'granted') { addEventListener('deviceorientation', onOrient); setS('orient', 'active', 'waiting…'); setS('compass', 'active', 'waiting…'); }
+    else { setS('orient', 'denied', o); setS('compass', 'denied', o); }
+  });
+}
+function askPerm(Ctor) {
+  if (!Ctor) return Promise.resolve('unsupported');
+  if (typeof Ctor.requestPermission !== 'function') return Promise.resolve('granted'); // non-iOS
+  try { return Ctor.requestPermission().catch(function (e) { return 'error: ' + e.message; }); }
+  catch (e) { return Promise.resolve('error: ' + e.message); }
+}
+function startGeo() {
+  if (!navigator.geolocation) return;
+  var id = navigator.geolocation.watchPosition(function (p) {
+    var c = p.coords;
+    S.latest.geo = { lat: C.round(c.latitude, 6), lon: C.round(c.longitude, 6), acc: C.round(c.accuracy, 1), alt: c.altitude, speed: c.speed, t: p.timestamp };
+    setS('geo', 'active', '±' + Math.round(c.accuracy) + ' m');
+  }, function (err) { setS('geo', err.code === 1 ? 'denied' : 'error', err.message || ('code ' + err.code)); },
+  { enableHighAccuracy: true, maximumAge: 5000, timeout: 30000 });
+  S.timers.push(function () { navigator.geolocation.clearWatch(id); });
+}
+function startMic(ctx) {
+  return navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } }).then(function (st) {
+    S.streams.push(st);
+    var src = ctx.createMediaStreamSource(st), an = ctx.createAnalyser(); an.fftSize = 2048; src.connect(an);
+    var buf = new Float32Array(an.fftSize);
+    var iv = setInterval(function () {
+      an.getFloatTimeDomainData(buf);
+      var sum = 0; for (var i = 0; i < buf.length; i++) sum += buf[i] * buf[i];
+      var db = 20 * Math.log10(Math.sqrt(sum / buf.length) || 1e-9);
+      S.latest.dbfs = { v: C.round(Math.max(db, -120), 1), t: now() };
+      setS('mic', 'active', S.latest.dbfs.v + ' dBFS');
+    }, 100);
+    S.timers.push(function () { clearInterval(iv); });
+  }).catch(function (e) { setS('mic', /denied|NotAllowed/i.test(e.name + e.message) ? 'denied' : 'error', e.name); });
+}
+function startCam() {
+  return navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment', width: 320, height: 240 } }).then(function (st) {
+    S.streams.push(st);
+    var v = $('#cam'); v.srcObject = st; v.play && v.play().catch(function () {});
+    var cv = document.createElement('canvas'); cv.width = 32; cv.height = 24; var cx = cv.getContext('2d', { willReadFrequently: true });
+    var iv = setInterval(function () {
+      if (v.readyState < 2) return;
+      cx.drawImage(v, 0, 0, 32, 24);
+      var d = cx.getImageData(0, 0, 32, 24).data, s = 0;
+      for (var i = 0; i < d.length; i += 4) s += 0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2];
+      S.latest.brightness = { v: C.round(s / (d.length / 4), 1), t: now() };
+      setS('cam', 'active', S.latest.brightness.v + ' / 255 luma');
+    }, 500);
+    S.timers.push(function () { clearInterval(iv); });
+  }).catch(function (e) { setS('cam', /denied|NotAllowed/i.test(e.name + e.message) ? 'denied' : 'error', e.name); });
+}
+function startBattery() {
+  if (!navigator.getBattery) return;
+  navigator.getBattery().then(function (b) {
+    var u = function () { S.latest.battery = { level: b.level, charging: b.charging }; setS('battery', 'active', Math.round(b.level * 100) + '%' + (b.charging ? ' ⚡' : '')); };
+    u(); b.addEventListener('levelchange', u); b.addEventListener('chargingchange', u);
+  }).catch(function (e) { setS('battery', 'error', e.name); });
+}
+function startStorage() {
+  var n = navigator;
+  if (!n.storage || !n.storage.estimate) return;
+  Promise.all([n.storage.persist ? n.storage.persist() : Promise.resolve(false), n.storage.estimate()]).then(function (r) {
+    setS('storage', 'active', (r[0] ? 'persistent · ' : 'best-effort · ') + Math.round((r[1].usage || 0) / 1024) + ' KB used');
+  }).catch(function () {});
+}
+
+/** Wake: MUST run synchronously inside the tap handler so iOS accepts requestPermission(). */
+function wake() {
+  if (S.running) return sleep();
+  // 1. iOS permission prompts first, synchronously in the gesture.
+  var pm = askPerm(window.DeviceMotionEvent), po = askPerm(window.DeviceOrientationEvent);
+  // 2. AudioContext must also be created/resumed inside the gesture.
+  var AC = window.AudioContext || window.webkitAudioContext, ctx = null;
+  if (AC && ST.mic.status !== 'unsupported') { try { ctx = new AC(); ctx.resume(); S.audio = ctx; } catch (e) { setS('mic', 'error', e.message); } }
+  S.running = true; $('#wake').textContent = 'Sleep'; $('#mode').textContent = 'sensing · nothing leaves this device';
+  banner('Sensing. Drop the phone onto a bed or sofa to test, or tap “Simulate drop”.', 'info');
+  startMotion(pm, po).then(function () {
+    startGeo(); startBattery(); startStorage();
+    var chain = Promise.resolve();
+    if (ctx) chain = chain.then(function () { return startMic(ctx); });
+    if (ST.cam.status !== 'unsupported' && ST.cam.status !== 'error') chain = chain.then(startCam);
+    return chain;
+  }).catch(function (e) { exception('Wake failed: ' + e.message); });
+  var iv = setInterval(detectTick, 250); S.timers.push(function () { clearInterval(iv); });
+}
+function sleep() {
+  S.running = false;
+  removeEventListener('devicemotion', onMotion); removeEventListener('deviceorientation', onOrient);
+  S.timers.forEach(function (f) { f(); }); S.timers = [];
+  S.streams.forEach(function (st) { st.getTracks().forEach(function (t) { t.stop(); }); }); S.streams = [];
+  if (S.audio) { S.audio.close(); S.audio = null; }
+  SENSORS.forEach(function (s) { if (ST[s.k] && ST[s.k].status === 'active' && ['accel', 'gyro', 'orient', 'compass', 'geo', 'mic', 'cam'].indexOf(s.k) >= 0) setS(s.k, 'available', 'stopped'); });
+  $('#wake').textContent = 'Wake sensors'; $('#mode').textContent = 'idle · nothing leaves this device';
+}
+
+// ------------------------------------------------------------ context snapshot (synchronized, with ages)
+function context() {
+  var t = now(), age = function (x) { return x && x.t ? Math.round(t - x.t) : null; }, L = S.latest;
+  return {
+    capturedAt: t,
+    headingDeg: L.heading ? L.heading.deg : null, headingAccDeg: L.heading ? L.heading.acc : null, headingAgeMs: L.heading ? Math.round(t - L.heading.t) : null,
+    soundDbfs: L.dbfs ? L.dbfs.v : null, soundAgeMs: age(L.dbfs),
+    brightness: L.brightness ? L.brightness.v : null, brightnessAgeMs: age(L.brightness),
+    geo: L.geo ? { lat: L.geo.lat, lon: L.geo.lon, accM: L.geo.acc } : null, geoAgeMs: L.geo ? Math.round(t - L.geo.t) : null,
+    battery: L.battery || null, visibility: document.visibilityState, online: navigator.onLine
+  };
+}
+
+// ------------------------------------------------------------ detection loop
+var busy = false;
+function detectTick() {
+  if (busy || !S.ledger) return;
+  var samples = S.buf.toArray(); if (samples.length < 10) return;
+  var lastT = samples[samples.length - 1].t;
+  var evs = C.detect(samples, P).filter(function (ev) { return ev.tImpact <= lastT - P.postMs && !S.processed[Math.round(ev.tImpact)]; });
+  if (!evs.length) return;
+  busy = true;
+  var chain = Promise.resolve();
+  evs.forEach(function (ev) {
+    S.processed[Math.round(ev.tImpact)] = 1;
+    chain = chain.then(function () { return record(C.windowFor(samples, ev.tImpact, P), 'devicemotion', false); });
+  });
+  chain.then(function () { busy = false; }, function (e) { busy = false; exception(e.message); });
+}
+function record(samples, source, synthetic) {
+  flash('white', 2500);
+  return C.recordEvent(S.ledger, { samples: samples, source: source, synthetic: synthetic, context: context(), params: P }).then(function (r) {
+    if (!r) { banner('Window analysed, no event confirmed.', 'info'); return; }
+    var i = r.inferred.data;
+    banner('Event: ' + i.hypothesis + ' (' + Math.round(i.confidence * 100) + '%)' + (synthetic ? ' [simulated]' : ''), 'attn');
+    if (navigator.vibrate) navigator.vibrate(80);
+    showInterp(r);
+    // immediate self-check: replay this window from OBSERVED alone
+    var rep = C.replay(S.ledger).results.filter(function (x) { return x.observedId === r.observed.id; })[0];
+    if (rep && rep.match) { markVerified(rep); setTimeout(function () { flash('gold', 2500); }, 1200); }
+    renderLedger();
+  }).catch(function (e) { exception(e.message); renderLedger(); });
+}
+function showInterp(r) {
+  var i = r.inferred.data, f = r.derived.data.features;
+  $('#last').hidden = false;
+  $('#interp').innerHTML =
+    '<div class="h">' + esc(i.hypothesis) + '<span class="conf" style="width:' + Math.round(i.confidence * 60) + 'px"></span> ' + Math.round(i.confidence * 100) + '%</div>' +
+    '<div><span class="tag c-OBSERVED">OBSERVED</span> ' + f.sampleCount + ' samples @ ' + f.sampleRateHz + ' Hz (' + r.observed.id + ')' + (r.observed.data.synthetic ? ' · simulated' : '') + '</div>' +
+    '<div><span class="tag c-DERIVED">DERIVED</span> peak ' + f.peakG + ' g · free fall ' + f.freefallMs + ' ms · ~' + f.estDropHeightM + ' m · ' + (f.cameToRest ? 'came to rest' : 'kept moving') + (f.dataGap ? ' · DATA GAP' : '') + '</div>' +
+    '<div><span class="tag c-INFERRED">INFERRED</span> ' + esc(i.rationale.join('; ')) + '</div>' +
+    '<div class="alt">Competing: ' + i.alternatives.map(function (a) { return esc(a.label) + ' (' + a.plausibility + ')'; }).join(' · ') + '</div>';
+}
+function markVerified(rep) { [rep.observedId, rep.derivedId].concat(rep.inferredIds).forEach(function (id) { if (id) S.verified[id] = 1; }); }
+
+// ------------------------------------------------------------ ledger UI
+function summary(e) {
+  var d = e.data || {};
+  if (e.kind === 'motion.window') return d.samples.length + ' samples' + (d.synthetic ? ' (simulated)' : '');
+  if (e.kind === 'motion.features') return 'peak ' + d.features.peakG + ' g · ff ' + d.features.freefallMs + ' ms';
+  if (e.kind === 'event.interpretation') return d.hypothesis + ' · ' + Math.round(e.confidence * 100) + '%';
+  if (e.kind === 'sensor.snapshot') return 'snapshot · ' + Object.keys(d).filter(function (k) { return d[k] != null; }).length + ' fields';
+  return e.kind;
+}
+function renderLedger() {
+  var L = S.ledger; if (!L) return;
+  $('#lcount').textContent = L.size; $('#lhead').textContent = L.head.slice(0, 10);
+  var t = now();
+  $('#ledger').innerHTML = L.entries().slice(-40).reverse().map(function (e) {
+    var st = L.status(e, t), shown = e.kind === 'motion.window' ? Object.assign({}, e, { data: Object.assign({}, e.data, { samples: '[' + e.data.samples.length + ' samples]' }) }) : e;
+    return '<details class="e ' + st + (S.verified[e.id] ? ' verified' : '') + '" data-id="' + e.id + '" data-class="' + e['class'] + '"><summary><span class="tag c-' + e['class'] + '">' + e['class'] +
+      '</span><span class="sum">' + esc(summary(e)) + '</span><small>' + st + '</small></summary><pre>' + esc(JSON.stringify(shown, null, 1)) + '</pre></details>';
+  }).join('');
+}
+
+// ------------------------------------------------------------ IndexedDB store (same shape as C.MemoryStore)
+function IDBStore(name) { this.name = name; this.db = null; }
+IDBStore.prototype.open = function () {
+  var self = this;
+  return new Promise(function (res, rej) {
+    var r = indexedDB.open(self.name, 1);
+    r.onupgradeneeded = function () { r.result.createObjectStore('ledger', { keyPath: 'seq' }); };
+    r.onsuccess = function () { self.db = r.result; res(self); }; r.onerror = function () { rej(r.error); };
+  });
+};
+IDBStore.prototype._tx = function (mode, fn) {
+  var self = this;
+  return new Promise(function (res, rej) {
+    var tx = self.db.transaction('ledger', mode), os = tx.objectStore('ledger'), out;
+    var rq = fn(os); if (rq) rq.onsuccess = function () { out = rq.result; };
+    tx.oncomplete = function () { res(out); }; tx.onerror = function () { rej(tx.error); }; tx.onabort = function () { rej(tx.error); };
+  });
+};
+IDBStore.prototype.add = function (e) { return this._tx('readwrite', function (os) { return os.add(JSON.parse(JSON.stringify(e))); }); }; // add() refuses overwrite
+IDBStore.prototype.all = function () { return this._tx('readonly', function (os) { return os.getAll(); }); };
+IDBStore.prototype.clear = function () { return this._tx('readwrite', function (os) { return os.clear(); }); };
+IDBStore.prototype.count = function () { return this._tx('readonly', function (os) { return os.count(); }); };
+
+// ------------------------------------------------------------ buttons
+function download(name, obj) {
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(obj, null, 1)], { type: 'application/json' }));
+  a.download = name; document.body.appendChild(a); a.click(); setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+}
+function bind() {
+  $('#wake').addEventListener('click', wake);
+  $('#snap').addEventListener('click', function () {
+    var c = context(), l = S.buf.last();
+    c.motion = l ? { ax: l.ax, ay: l.ay, az: l.az, g: C.round(C.magG(l)), ageMs: Math.round(now() - l.t) } : null;
+    S.ledger.append({ source: 'snapshot', 'class': 'OBSERVED', kind: 'sensor.snapshot', data: c })
+      .then(function () { banner('Snapshot stored as OBSERVED.', 'info'); renderLedger(); }, function (e) { exception(e.message); });
+  });
+  $('#sim').addEventListener('click', function () {
+    var tr = C.synth.drop({ t0: now() - 4000, heightM: 0.5 + Math.random() * 0.8, seed: (Math.random() * 1e9) | 0, preMs: 1500, postMs: 1500 });
+    // simulated samples are NOT pushed into the live buffer (would be re-detected as real motion)
+    var ev = C.detect(tr, P)[0];
+    record(C.windowFor(tr, ev.tImpact, P), 'simulator', true);
+  });
+  $('#replay').addEventListener('click', function () {
+    var r = C.replay(S.ledger);
+    r.results.forEach(function (x) { if (x.match) markVerified(x); });
+    if (!r.checked) banner('Nothing to replay yet.', 'info');
+    else if (r.matched === r.checked) { banner('Replay: ' + r.matched + '/' + r.checked + ' windows reproduce the stored DERIVED + INFERRED entries exactly.', 'ok'); flash('gold', 3000); }
+    else exception('Replay mismatch: ' + (r.checked - r.matched) + '/' + r.checked + ' — ' + r.results.filter(function (x) { return !x.match; }).map(function (x) { return x.observedId + ': ' + x.problems.join(', '); }).join(' | '));
+    S.lastReplay = r; renderLedger();
+  });
+  $('#verify').addEventListener('click', function () {
+    var v = S.ledger.verify();
+    S.ledger.store.count().then(function (n) {
+      if (v.ok && n === S.ledger.size) { banner('Chain OK: ' + v.count + ' entries, hashes + firewall + provenance re-verified; IndexedDB holds ' + n + '.', 'ok'); flash('gold', 2500); }
+      else exception('Chain check failed: ' + (v.error || ('IndexedDB has ' + n + ' vs memory ' + S.ledger.size)));
+    });
+  });
+  $('#fw').addEventListener('click', function () {
+    var L = S.ledger, obs = L.byClass('OBSERVED')[0], inf = L.byClass('INFERRED')[0];
+    var attempts = [
+      ['INFERRED with no provenance', { source: 'test', 'class': 'INFERRED', kind: 'fw.test', data: { alternatives: ['x'] }, confidence: 0.9 }],
+      ['OBSERVED derived from something', { source: 'test', 'class': 'OBSERVED', kind: 'fw.test', provenance: obs ? [obs.id] : ['missing'] }],
+      ['Upgrade INFERRED -> OBSERVED', { source: 'test', 'class': 'OBSERVED', kind: 'fw.test', supersedes: inf ? inf.id : 'missing' }],
+      ['DERIVED citing an INFERRED', { source: 'test', 'class': 'DERIVED', kind: 'fw.test', provenance: inf ? [inf.id] : ['missing'] }]
+    ];
+    Promise.all(attempts.map(function (a) { return L.append(a[1]).then(function () { return a[0] + ': ACCEPTED (bug!)'; }, function (e) { return a[0] + ': blocked ' + (e.rule || e.name); }); }))
+      .then(function (r) { var bad = r.some(function (x) { return /ACCEPTED/.test(x); }); (bad ? exception : function (m) { banner(m, 'err'); flash('red', 2500); })('Firewall test → ' + r.join(' · ')); renderLedger(); });
+  });
+  $('#export').addEventListener('click', function () { download('axis-genie-ledger-' + new Date().toISOString().replace(/[:.]/g, '-') + '.json', S.ledger.exportJSON()); banner('Exported ' + S.ledger.size + ' entries (file stays on this device unless you share it).', 'info'); });
+  $('#importBtn').addEventListener('click', function () { $('#import').click(); });
+  $('#import').addEventListener('change', function (ev) {
+    var f = ev.target.files[0]; ev.target.value = ''; if (!f) return;
+    f.text().then(function (txt) { return importJSON(JSON.parse(txt)); }).catch(function (e) { exception('Import rejected: ' + e.message); });
+  });
+  $('#wipe').addEventListener('click', function () {
+    if (!confirm('Delete all ' + S.ledger.size + ' ledger entries from this device? This cannot be undone.')) return;
+    S.ledger.wipe().then(function (r) {
+      S.verified = {}; S.processed = {};
+      try { localStorage.setItem('genie.lastDeletion', JSON.stringify(r)); } catch (e) {}
+      showReceipt(r); renderLedger(); $('#last').hidden = true;
+      r.verified ? banner('Deleted ' + r.deletedCount + ' entries; IndexedDB re-counted: ' + r.postCount + '.', 'ok') : exception('Deletion NOT verified: ' + r.postCount + ' rows remain');
+    }).catch(function (e) { exception(e.message); });
+  });
+}
+function importJSON(obj) {
+  if (!obj || obj.format !== 'axis-genie-ledger' || !Array.isArray(obj.entries)) throw new Error('not an axis-genie-ledger file');
+  if (S.ledger.size) throw new Error('ledger is not empty; export + delete first (append-only: import never merges or overwrites)');
+  return S.ledger.loadVerified(obj.entries, true).then(function (n) {
+    if (obj.head && obj.head !== S.ledger.head) throw new Error('head hash mismatch');
+    banner('Imported ' + n + ' entries; every hash, link and firewall rule re-verified.', 'ok'); flash('gold', 2500); renderLedger();
+  });
+}
+function showReceipt(r) { $('#receipt').textContent = r ? 'Last deletion: ' + new Date(r.at).toLocaleString() + ' · ' + r.deletedCount + ' entries · head ' + r.headBefore.slice(0, 10) + ' · post-count ' + r.postCount + ' · receipt ' + r.receiptHash.slice(0, 12) : ''; }
+
+// ------------------------------------------------------------ boot
+function boot() {
+  $('#ver').textContent = C.VERSION; $('#pff').textContent = P.freefallG + ' g'; $('#pim').textContent = P.impactG + ' g';
+  probe(); bind(); frame();
+  setInterval(function () { renderSensors(); var l = S.buf.last(); $('#r-g').textContent = l ? C.magG(l).toFixed(2) : '–';
+    $('#r-h').textContent = S.latest.heading ? Math.round(S.latest.heading.deg) + '°' : '–';
+    $('#r-db').textContent = S.latest.dbfs ? S.latest.dbfs.v : '–';
+    $('#r-lux').textContent = S.latest.brightness ? S.latest.brightness.v : '–';
+    $('#r-geo').textContent = S.latest.geo ? '±' + Math.round(S.latest.geo.acc) + 'm' : '–';
+    $('#r-buf').textContent = S.buf.length; }, 250);
+  setInterval(renderLedger, 5000); // freshness ageing (stale/expired) without new entries
+  try { showReceipt(JSON.parse(localStorage.getItem('genie.lastDeletion'))); } catch (e) {}
+  var store = new IDBStore('axis-genie');
+  store.open().then(function () {
+    S.ledger = new C.Ledger({ store: store });
+    return S.ledger.boot();
+  }).then(function (n) { renderLedger(); if (n) banner('Ledger loaded and re-verified: ' + n + ' entries.', 'info'); })
+    .catch(function (e) {
+      exception('Ledger failed verification at boot: ' + e.message + '. Stored data was NOT loaded; export it from devtools or delete.');
+      if (!S.ledger) S.ledger = new C.Ledger({ store: new C.MemoryStore() });
+    });
+  if ('serviceWorker' in navigator && isSecureContext) navigator.serviceWorker.register('sw.js').catch(function () {});
+}
+boot();
+})();
+</script>
+</body>
+</html>

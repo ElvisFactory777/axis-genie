@@ -1,0 +1,1107 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#05070a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Genie">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; worker-src 'self'">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<title>AXIS · Genie MVP</title>
+<style>
+:root{--bg:#05070a;--panel:#0c1016;--line:#1a212b;--text:#d7dde5;--dim:#6b7280;
+--blue:#3b82f6;--gold:#e8b923;--white:#f5f7fa;--red:#ef4444;--grey:#5b6370}
+*{box-sizing:border-box}html,body{margin:0;background:var(--bg);color:var(--text);
+font:14px/1.4 -apple-system,BlinkMacSystemFont,"SF Pro Text",system-ui,sans-serif;-webkit-text-size-adjust:100%}
+body{padding:env(safe-area-inset-top) 12px calc(env(safe-area-inset-bottom) + 16px)}
+header{display:flex;align-items:center;gap:12px;padding:12px 0 4px}
+#orb{width:72px;height:72px;flex:none}
+h1{font-size:15px;font-weight:600;margin:0;letter-spacing:.04em}
+#mode{font-size:12px;color:var(--dim)}
+.row{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}
+button{flex:1 1 auto;min-height:44px;border-radius:10px;border:1px solid var(--line);background:var(--panel);
+color:var(--text);font:inherit;padding:8px 10px}
+button.primary{background:var(--blue);border-color:var(--blue);color:#fff;font-weight:600}
+button.danger{color:var(--red);border-color:#3a1a1a}
+button:active{opacity:.7}
+section{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin:10px 0}
+section h2{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--dim);margin:0 0 6px;font-weight:600}
+#spark{width:100%;height:90px;display:block}
+.readouts{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;font-variant-numeric:tabular-nums}
+.readouts div{font-size:12px;color:var(--dim)}.readouts b{display:block;color:var(--text);font-size:15px;font-weight:500}
+ul{list-style:none;margin:0;padding:0}
+.s{display:flex;align-items:center;gap:8px;padding:5px 0;border-top:1px solid var(--line);font-size:13px}
+.s:first-child{border-top:0}
+.dot{width:9px;height:9px;border-radius:50%;flex:none;background:var(--grey)}
+.st-active .dot{background:var(--blue);box-shadow:0 0 6px var(--blue)}
+.st-available .dot{background:transparent;border:1.5px solid var(--white)}
+.st-denied .dot,.st-error .dot{background:var(--red)}
+.st-unsupported .dot{background:#2a3038}
+.st-stale .dot{background:var(--grey)}
+.s .name{flex:1}.s .val{color:var(--dim);font-size:12px;text-align:right;font-variant-numeric:tabular-nums}
+.s.st-unsupported{color:var(--dim)}
+.e{border-top:1px solid var(--line);padding:6px 0;font-size:12.5px}
+.e summary{list-style:none;display:flex;gap:6px;align-items:baseline;cursor:pointer}
+.e summary::-webkit-details-marker{display:none}
+.tag{font-size:10px;letter-spacing:.06em;padding:1px 5px;border-radius:4px;border:1px solid currentColor;flex:none}
+.c-OBSERVED{color:var(--blue)}.c-DERIVED{color:#9fb4d0}.c-INFERRED{color:var(--white)}.c-SPECULATIVE{color:#b58cf0}.c-UNKNOWN{color:var(--dim)}
+.e .sum{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.e.stale,.e.expired,.e.superseded{opacity:.5}
+.e.verified .sum::after{content:" ✓ replay";color:var(--gold)}
+.e pre{white-space:pre-wrap;word-break:break-all;font-size:11px;color:var(--dim);max-height:260px;overflow:auto;margin:6px 0 0}
+#banner{font-size:13px;min-height:1.4em;margin:6px 0}
+#banner.attn{color:var(--white)}#banner.ok{color:var(--gold)}#banner.err{color:var(--red)}#banner.info{color:var(--dim)}
+.interp{font-size:13px}.interp .h{color:var(--white);font-size:15px}.interp .alt{color:var(--dim);font-size:12px}
+.conf{display:inline-block;height:4px;background:var(--white);border-radius:2px;vertical-align:middle;margin-left:6px}
+small{color:var(--dim)}
+input[type=file]{display:none}
+</style>
+</head>
+<body>
+<header>
+  <canvas id="orb" width="144" height="144" aria-label="state glyph"></canvas>
+  <div><h1>AXIS · GENIE MVP</h1><div id="mode">idle · nothing leaves this device</div></div>
+</header>
+
+<div class="row">
+  <button id="wake" class="primary">Wake sensors</button>
+  <button id="snap">Snapshot</button>
+  <button id="sim">Simulate drop</button>
+</div>
+<div id="banner" class="info">Tap “Wake sensors”. iOS asks for Motion, Location, Microphone and Camera.</div>
+
+<section>
+  <h2>Motion |a| (g) · free-fall &lt; <span id="pff"></span> · impact ≥ <span id="pim"></span></h2>
+  <canvas id="spark" width="600" height="180"></canvas>
+  <div class="readouts">
+    <div>|a|<b id="r-g">–</b></div><div>heading<b id="r-h">–</b></div><div>sound<b id="r-db">–</b></div>
+    <div>light<b id="r-lux">–</b></div><div>location<b id="r-geo">–</b></div><div>buffer<b id="r-buf">0</b></div>
+  </div>
+</section>
+
+<section id="last" hidden><h2>Latest interpretation</h2><div class="interp" id="interp"></div></section>
+
+<section><h2>Sensors</h2><ul id="sensors"></ul></section>
+
+<section>
+  <h2>Ledger · <span id="lcount">0</span> entries · head <span id="lhead">–</span></h2>
+  <div class="row">
+    <button id="replay">Replay</button><button id="verify">Verify chain</button><button id="fw">Test firewall</button>
+  </div>
+  <div id="ledger"></div>
+  <div class="row">
+    <button id="export">Export JSON</button><button id="importBtn">Import JSON</button><input type="file" id="import" accept="application/json,.json">
+    <button id="wipe" class="danger">Delete all</button>
+  </div>
+  <small id="receipt"></small>
+</section>
+<small>Glyph: <span style="color:var(--blue)">blue</span> sensing · <span style="color:var(--gold)">gold</span> verified · <span style="color:var(--white)">white</span> attention · <span style="color:var(--red)">red</span> exception · <span style="color:var(--grey)">grey</span> stale/idle. v<span id="ver"></span></small>
+
+<video id="cam" playsinline muted autoplay style="display:none"></video>
+
+<script>
+/* AXIS genie-mvp core: ledger, epistemic firewall, detector, interpretation, replay.
+ * Pure JS, no dependencies. Runs in Node (CommonJS) and in the browser (window.GenieCore).
+ * Nothing in this module does I/O; persistence is injected as a "store" adapter. */
+(function (root, factory) {
+  var m = factory();
+  if (typeof module === 'object' && module.exports) module.exports = m;
+  else root.GenieCore = m;
+})(typeof self !== 'undefined' ? self : this, function () {
+  'use strict';
+
+  var VERSION = '0.1.0';
+  var G = 9.80665;
+  var CLASSES = Object.freeze(['OBSERVED', 'DERIVED', 'INFERRED', 'SPECULATIVE', 'UNKNOWN']);
+  var GENESIS = '0'.repeat(64);
+
+  // ---------------------------------------------------------------- utilities
+  function round(x, d) { var p = Math.pow(10, d == null ? 4 : d); return Math.round(x * p) / p; }
+  function clamp(x, lo, hi) { return x < lo ? lo : x > hi ? hi : x; }
+
+  /** Canonical JSON: sorted keys, undefined dropped, non-finite numbers -> null. Used for hashing and replay comparison. */
+  function canonical(v) {
+    if (v === null || v === undefined) return 'null';
+    if (typeof v === 'number') return Number.isFinite(v) ? JSON.stringify(v) : 'null';
+    if (typeof v !== 'object') return JSON.stringify(v);
+    if (Array.isArray(v)) return '[' + v.map(canonical).join(',') + ']';
+    return '{' + Object.keys(v).filter(function (k) { return v[k] !== undefined; }).sort()
+      .map(function (k) { return JSON.stringify(k) + ':' + canonical(v[k]); }).join(',') + '}';
+  }
+
+  function deepFreeze(o) {
+    if (o && typeof o === 'object' && !Object.isFrozen(o)) {
+      Object.freeze(o);
+      Object.keys(o).forEach(function (k) { deepFreeze(o[k]); });
+    }
+    return o;
+  }
+  function clone(o) { return o == null ? o : JSON.parse(JSON.stringify(o)); }
+
+  // ---------------------------------------------------------------- SHA-256 (sync, UTF-8)
+  var K = [0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,
+    0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,
+    0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,
+    0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,
+    0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,
+    0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,
+    0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,
+    0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2];
+  function sha256(str) {
+    var bytes = new TextEncoder().encode(str), l = bytes.length;
+    var n = ((l + 9 + 63) >> 6) << 6, buf = new Uint8Array(n);
+    buf.set(bytes); buf[l] = 0x80;
+    var dv = new DataView(buf.buffer);
+    dv.setUint32(n - 4, (l * 8) >>> 0); dv.setUint32(n - 8, Math.floor(l / 0x20000000));
+    var h = [0x6a09e667,0xbb67ae85,0x3c6ef372,0xa54ff53a,0x510e527f,0x9b05688c,0x1f83d9ab,0x5be0cd19];
+    var w = new Uint32Array(64);
+    for (var off = 0; off < n; off += 64) {
+      for (var i = 0; i < 16; i++) w[i] = dv.getUint32(off + i * 4);
+      for (i = 16; i < 64; i++) {
+        var a15 = w[i - 15], a2 = w[i - 2];
+        var s0 = ((a15 >>> 7) | (a15 << 25)) ^ ((a15 >>> 18) | (a15 << 14)) ^ (a15 >>> 3);
+        var s1 = ((a2 >>> 17) | (a2 << 15)) ^ ((a2 >>> 19) | (a2 << 13)) ^ (a2 >>> 10);
+        w[i] = (w[i - 16] + s0 + w[i - 7] + s1) >>> 0;
+      }
+      var A = h[0], B = h[1], C = h[2], D = h[3], E = h[4], F = h[5], Gg = h[6], H = h[7];
+      for (i = 0; i < 64; i++) {
+        var S1 = ((E >>> 6) | (E << 26)) ^ ((E >>> 11) | (E << 21)) ^ ((E >>> 25) | (E << 7));
+        var ch = (E & F) ^ (~E & Gg);
+        var t1 = (H + S1 + ch + K[i] + w[i]) >>> 0;
+        var S0 = ((A >>> 2) | (A << 30)) ^ ((A >>> 13) | (A << 19)) ^ ((A >>> 22) | (A << 10));
+        var mj = (A & B) ^ (A & C) ^ (B & C);
+        var t2 = (S0 + mj) >>> 0;
+        H = Gg; Gg = F; F = E; E = (D + t1) >>> 0; D = C; C = B; B = A; A = (t1 + t2) >>> 0;
+      }
+      h[0] = (h[0] + A) >>> 0; h[1] = (h[1] + B) >>> 0; h[2] = (h[2] + C) >>> 0; h[3] = (h[3] + D) >>> 0;
+      h[4] = (h[4] + E) >>> 0; h[5] = (h[5] + F) >>> 0; h[6] = (h[6] + Gg) >>> 0; h[7] = (h[7] + H) >>> 0;
+    }
+    return h.map(function (x) { return ('00000000' + x.toString(16)).slice(-8); }).join('');
+  }
+
+  // ---------------------------------------------------------------- epistemic firewall
+  function FirewallError(rule, message) {
+    var e = new Error('[firewall ' + rule + '] ' + message);
+    e.name = 'FirewallError'; e.rule = rule;
+    return e;
+  }
+  function LedgerIntegrityError(message) {
+    var e = new Error('[integrity] ' + message); e.name = 'LedgerIntegrityError'; return e;
+  }
+
+  /**
+   * Firewall rules (all enforced before anything is written):
+   *  F1 class must be one of CLASSES.
+   *  F2 source and kind must be non-empty strings.
+   *  F3 confidence in [0,1] (or null). INFERRED needs 0 < c < 1 (an inference is never certain).
+   *     SPECULATIVE needs c <= 0.5.
+   *  F4 provenance: array of unique ids, no self-citation, every id already in the ledger (no forward refs).
+   *  F5 OBSERVED has empty provenance: an observation is never derived from anything, so nothing
+   *     computed or inferred can be (re)labelled OBSERVED.
+   *  F6 DERIVED must cite >=1 entry and may cite only OBSERVED or DERIVED (no laundering inferences into "facts").
+   *  F7 INFERRED must cite >=1 OBSERVED or DERIVED entry, may not cite SPECULATIVE, and must carry
+   *     data.alternatives (non-empty list of competing explanations).
+   *  F8 nothing may cite an entry that has expired at the time of writing.
+   *  F9 supersedes: target must exist, have the SAME class (so no upgrade, e.g. INFERRED -> OBSERVED),
+   *     and must not already be superseded.
+   *  F10 freshness is a positive number of ms (or null); expiry is null or later than ts.
+   */
+  function firewallCheck(e, view) {
+    if (CLASSES.indexOf(e['class']) < 0) throw FirewallError('F1', 'unknown class ' + JSON.stringify(e['class']));
+    if (typeof e.source !== 'string' || !e.source) throw FirewallError('F2', 'source required');
+    if (typeof e.kind !== 'string' || !e.kind) throw FirewallError('F2', 'kind required');
+    var c = e.confidence;
+    if (c !== null && (typeof c !== 'number' || !(c >= 0 && c <= 1))) throw FirewallError('F3', 'confidence must be in [0,1] or null');
+    if (e['class'] === 'INFERRED' && !(typeof c === 'number' && c > 0 && c < 1)) throw FirewallError('F3', 'INFERRED needs 0 < confidence < 1');
+    if (e['class'] === 'SPECULATIVE' && !(typeof c === 'number' && c <= 0.5)) throw FirewallError('F3', 'SPECULATIVE needs confidence <= 0.5');
+
+    var prov = e.provenance;
+    if (!Array.isArray(prov)) throw FirewallError('F4', 'provenance must be an array');
+    var seen = {};
+    var cited = prov.map(function (id) {
+      if (typeof id !== 'string') throw FirewallError('F4', 'provenance ids must be strings');
+      if (seen[id]) throw FirewallError('F4', 'duplicate provenance id ' + id);
+      seen[id] = 1;
+      if (id === e.id) throw FirewallError('F4', 'self-citation');
+      var p = view.get(id);
+      if (!p) throw FirewallError('F4', 'provenance id not in ledger: ' + id);
+      if (p.expiry != null && p.expiry <= e.ts) throw FirewallError('F8', 'cites expired entry ' + id);
+      return p;
+    });
+    var classes = cited.map(function (p) { return p['class']; });
+    var grounded = classes.filter(function (k) { return k === 'OBSERVED' || k === 'DERIVED'; }).length;
+
+    if (e['class'] === 'OBSERVED' && prov.length) throw FirewallError('F5', 'OBSERVED entries cannot have provenance (cannot be derived/upgraded into an observation)');
+    if (e['class'] === 'DERIVED') {
+      if (!prov.length) throw FirewallError('F6', 'DERIVED must cite its inputs');
+      if (grounded !== prov.length) throw FirewallError('F6', 'DERIVED may cite only OBSERVED/DERIVED, got ' + classes.join(','));
+    }
+    if (e['class'] === 'INFERRED') {
+      if (!grounded) throw FirewallError('F7', 'INFERRED must cite at least one OBSERVED or DERIVED entry');
+      if (classes.indexOf('SPECULATIVE') >= 0) throw FirewallError('F7', 'INFERRED may not rest on SPECULATIVE entries');
+      if (!e.data || !Array.isArray(e.data.alternatives) || !e.data.alternatives.length)
+        throw FirewallError('F7', 'INFERRED must list competing explanations in data.alternatives');
+    }
+    if (e.supersedes != null) {
+      var t = view.get(e.supersedes);
+      if (!t) throw FirewallError('F9', 'supersedes unknown id ' + e.supersedes);
+      if (t['class'] !== e['class']) throw FirewallError('F9', 'cannot supersede ' + t['class'] + ' with ' + e['class'] + ' (no class change / upgrade)');
+      if (view.supersededBy(t.id)) throw FirewallError('F9', t.id + ' already superseded');
+    }
+    if (e.freshness !== null && !(typeof e.freshness === 'number' && e.freshness > 0)) throw FirewallError('F10', 'freshness must be > 0 ms or null');
+    if (e.expiry !== null && !(typeof e.expiry === 'number' && e.expiry > e.ts)) throw FirewallError('F10', 'expiry must be null or after ts');
+    return true;
+  }
+
+  // ---------------------------------------------------------------- ledger
+  var DEFAULTS_BY_CLASS = {
+    OBSERVED: { freshness: 60e3, ttl: 30 * 864e5 },
+    DERIVED: { freshness: 60e3, ttl: 30 * 864e5 },
+    INFERRED: { freshness: 5 * 60e3, ttl: 30 * 864e5 },
+    SPECULATIVE: { freshness: 5 * 60e3, ttl: 7 * 864e5 },
+    UNKNOWN: { freshness: 60e3, ttl: 7 * 864e5 }
+  };
+  var ENTRY_FIELDS = ['seq', 'id', 'ts', 'source', 'class', 'kind', 'data', 'provenance', 'confidence', 'freshness', 'expiry', 'supersedes', 'prevHash'];
+
+  function hashEntry(e) {
+    var o = {}; ENTRY_FIELDS.forEach(function (k) { o[k] = e[k]; });
+    return sha256(canonical(o));
+  }
+
+  /** In-memory store adapter (tests / fallback). Browser uses an IndexedDB adapter with the same shape. */
+  function MemoryStore() { this.rows = []; }
+  MemoryStore.prototype.add = function (e) {
+    if (this.rows.some(function (r) { return r.seq === e.seq; })) return Promise.reject(new Error('seq exists'));
+    this.rows.push(clone(e)); return Promise.resolve();
+  };
+  MemoryStore.prototype.all = function () { return Promise.resolve(this.rows.map(clone)); };
+  MemoryStore.prototype.clear = function () { this.rows = []; return Promise.resolve(); };
+  MemoryStore.prototype.count = function () { return Promise.resolve(this.rows.length); };
+
+  /**
+   * Append-only, hash-chained ledger. There is no update or delete-one API. Entries are frozen.
+   * The only destructive operation is wipe(), which removes everything and returns a verifiable receipt.
+   */
+  function Ledger(opts) {
+    opts = opts || {};
+    this.store = opts.store || null;
+    this.clock = opts.clock || function () { return Date.now(); };
+    this._reset();
+  }
+  Ledger.prototype._reset = function () {
+    this._entries = []; this._byId = new Map(); this._supersededBy = new Map(); this._q = Promise.resolve();
+  };
+  Object.defineProperty(Ledger.prototype, 'size', { get: function () { return this._entries.length; } });
+  Object.defineProperty(Ledger.prototype, 'head', { get: function () { var n = this._entries.length; return n ? this._entries[n - 1].hash : GENESIS; } });
+  Ledger.prototype.get = function (id) { return this._byId.get(id) || null; };
+  Ledger.prototype.supersededBy = function (id) { return this._supersededBy.get(id) || null; };
+  Ledger.prototype.entries = function () { return this._entries.slice(); };
+  Ledger.prototype.byClass = function (k) { return this._entries.filter(function (e) { return e['class'] === k; }); };
+
+  /** Build a sealed entry from a draft (does not validate or write). */
+  Ledger.prototype.seal = function (d) {
+    var k = d['class'];
+    var def = DEFAULTS_BY_CLASS[k] || DEFAULTS_BY_CLASS.UNKNOWN;
+    var last = this._entries[this._entries.length - 1];
+    var ts = Math.max(Math.round(this.clock()), last ? last.ts : 0);
+    var e = {
+      seq: this._entries.length,
+      id: null,
+      ts: ts,
+      source: d.source,
+      'class': k,
+      kind: d.kind,
+      data: d.data === undefined ? null : clone(d.data),
+      provenance: (d.provenance || []).slice(),
+      confidence: d.confidence === undefined ? (k === 'OBSERVED' ? 1 : null) : d.confidence,
+      freshness: d.freshness === undefined ? def.freshness : d.freshness,
+      expiry: d.expiry === undefined ? ts + def.ttl : d.expiry,
+      supersedes: d.supersedes == null ? null : d.supersedes,
+      prevHash: this.head
+    };
+    e.id = (k ? String(k).charAt(0) : 'X') + String(e.seq).padStart(6, '0') + '-' +
+      sha256(canonical({ seq: e.seq, ts: e.ts, source: e.source, kind: e.kind, data: e.data, prevHash: e.prevHash })).slice(0, 8);
+    e.hash = hashEntry(e);
+    return e;
+  };
+
+  /** Validate a sealed entry against current state: chain integrity + firewall. Throws on violation. */
+  Ledger.prototype._admit = function (e) {
+    var n = this._entries.length, last = this._entries[n - 1];
+    if (e.seq !== n) throw LedgerIntegrityError('expected seq ' + n + ', got ' + e.seq);
+    if (e.prevHash !== this.head) throw LedgerIntegrityError('prevHash mismatch at seq ' + e.seq);
+    if (hashEntry(e) !== e.hash) throw LedgerIntegrityError('hash mismatch at seq ' + e.seq + ' (entry was altered)');
+    if (this._byId.has(e.id)) throw LedgerIntegrityError('duplicate id ' + e.id);
+    if (typeof e.ts !== 'number' || (last && e.ts < last.ts)) throw LedgerIntegrityError('non-monotonic ts at seq ' + e.seq);
+    firewallCheck(e, this);
+  };
+  Ledger.prototype._commit = function (e) {
+    deepFreeze(e);
+    this._entries.push(e); this._byId.set(e.id, e);
+    if (e.supersedes) this._supersededBy.set(e.supersedes, e.id);
+  };
+
+  /** Append a draft {source, class, kind, data, provenance, confidence, freshness?, expiry?, supersedes?}. Serialized. */
+  Ledger.prototype.append = function (draft) {
+    var self = this;
+    var p = this._q.then(function () {
+      var e = self.seal(draft);
+      self._admit(e);
+      return (self.store ? self.store.add(e) : Promise.resolve()).then(function () { self._commit(e); return e; });
+    });
+    this._q = p.catch(function () {});
+    return p;
+  };
+
+  /** Load (and fully re-verify) entries, e.g. from IndexedDB at boot or from an imported file. Ledger must be empty. */
+  Ledger.prototype.loadVerified = function (entries, persist) {
+    var self = this;
+    if (this._entries.length) return Promise.reject(LedgerIntegrityError('loadVerified requires an empty ledger'));
+    var sorted = entries.slice().sort(function (a, b) { return a.seq - b.seq; });
+    try { sorted.forEach(function (raw) { var e = clone(raw); self._admit(e); self._commit(e); }); }
+    catch (err) { this._reset(); return Promise.reject(err); }
+    if (!persist || !this.store) return Promise.resolve(this.size);
+    return sorted.reduce(function (pr, e) { return pr.then(function () { return self.store.add(e); }); }, Promise.resolve())
+      .then(function () { return self.size; });
+  };
+
+  Ledger.prototype.boot = function () {
+    var self = this;
+    return this.store.all().then(function (rows) { return self.loadVerified(rows, false); });
+  };
+
+  /** Re-verify the whole chain from scratch (hashes, links, firewall, provenance). */
+  Ledger.prototype.verify = function () {
+    var probe = new Ledger({ clock: this.clock });
+    try { this._entries.forEach(function (e) { probe._admit(e); probe._commit(e); }); }
+    catch (err) { return { ok: false, error: err.message, count: probe.size }; }
+    return { ok: true, count: probe.size, head: probe.head };
+  };
+
+  Ledger.prototype.status = function (e, now) {
+    now = now == null ? this.clock() : now;
+    if (this._supersededBy.has(e.id)) return 'superseded';
+    return statusOf(e, now);
+  };
+  function statusOf(e, now) {
+    if (e.expiry != null && now >= e.expiry) return 'expired';
+    if (e.freshness != null && now - e.ts > e.freshness) return 'stale';
+    return 'fresh';
+  }
+
+  /** Transitive provenance closure; returns the OBSERVED roots an entry ultimately rests on. */
+  Ledger.prototype.groundTruthOf = function (id) {
+    var out = [], seen = {}, self = this;
+    (function walk(i) {
+      if (seen[i]) return; seen[i] = 1;
+      var e = self.get(i); if (!e) return;
+      if (e['class'] === 'OBSERVED') out.push(e.id);
+      e.provenance.forEach(walk);
+    })(id);
+    return out;
+  };
+
+  Ledger.prototype.exportJSON = function () {
+    return { format: 'axis-genie-ledger', version: VERSION, exportedAt: Math.round(this.clock()), count: this.size, head: this.head, entries: this.entries() };
+  };
+
+  /** Wipe everything (memory + store) and verify the store is empty afterwards. Returns a deletion receipt. */
+  Ledger.prototype.wipe = function () {
+    var self = this, before = { count: this.size, head: this.head };
+    return this._q.then(function () {
+      return (self.store ? self.store.clear().then(function () { return self.store.count(); }) : Promise.resolve(0));
+    }).then(function (postCount) {
+      self._reset();
+      var receipt = { at: Math.round(self.clock()), deletedCount: before.count, headBefore: before.head, postCount: postCount, memoryCount: self.size, verified: postCount === 0 && self.size === 0 };
+      receipt.receiptHash = sha256(canonical(receipt));
+      return receipt;
+    });
+  };
+
+  // ---------------------------------------------------------------- ring buffer
+  function RingBuffer(capacity) { this.cap = capacity; this.buf = new Array(capacity); this.start = 0; this.length = 0; }
+  RingBuffer.prototype.push = function (x) {
+    var i = (this.start + this.length) % this.cap;
+    this.buf[i] = x;
+    if (this.length < this.cap) this.length++; else this.start = (this.start + 1) % this.cap;
+  };
+  RingBuffer.prototype.toArray = function () {
+    var out = new Array(this.length);
+    for (var i = 0; i < this.length; i++) out[i] = this.buf[(this.start + i) % this.cap];
+    return out;
+  };
+  RingBuffer.prototype.last = function () { return this.length ? this.buf[(this.start + this.length - 1) % this.cap] : null; };
+  RingBuffer.prototype.clear = function () { this.start = 0; this.length = 0; };
+
+  // ---------------------------------------------------------------- detector
+  /** Samples: {t (ms, epoch), ax, ay, az (accelerationIncludingGravity, m/s^2), rx, ry, rz (deg/s, optional)} */
+  var DEFAULT_PARAMS = deepFreeze({
+    version: 'drop-v1',
+    freefallG: 0.4,        // |a| below this (in g) counts as free fall
+    minFreefallMs: 100,    // free fall must last this long (~5 cm drop height)
+    impactG: 2.0,          // impact peak after free fall must reach this (60 Hz sampling under-reads true peaks)
+    maxImpactDelayMs: 300, // impact must start within this time after free fall ends
+    impactAloneG: 3.0,     // spike without preceding free fall => 'impact' (bump/knock) event
+    settleMs: 400,         // ignore ringing this long after the impact peak
+    stillWindowMs: 600,    // window after settle used to test "came to rest"
+    stillStdG: 0.06,       // std of |a| below this => at rest
+    preMs: 1500,           // OBSERVED window before impact
+    postMs: 1500,          // OBSERVED window after impact (event confirmed only after this has elapsed)
+    refractoryMs: 2000,    // minimum spacing between events
+    maxGapFactor: 3        // a sample gap > factor * median interval is flagged as a data gap
+  });
+
+  function magG(s) { return Math.sqrt(s.ax * s.ax + s.ay * s.ay + s.az * s.az) / G; }
+
+  function detect(samples, params) {
+    var P = params || DEFAULT_PARAMS, n = samples.length, events = [];
+    var m = samples.map(magG);
+    var i = 0;
+    while (i < n) {
+      if (m[i] < P.freefallG) {
+        var j = i; while (j < n && m[j] < P.freefallG) j++;
+        var ffStart = samples[i].t, ffEnd = samples[j - 1].t, ffMs = ffEnd - ffStart;
+        if (ffMs >= P.minFreefallMs && j < n) {
+          var k = j, best = -1;
+          while (k < n && samples[k].t - ffEnd <= P.maxImpactDelayMs) { if (best < 0 || m[k] > m[best]) best = k; k++; }
+          if (best >= 0 && m[best] >= P.impactG) {
+            var minFF = Infinity; for (var q = i; q < j; q++) minFF = Math.min(minFF, m[q]);
+            events.push({ type: 'drop', tImpact: samples[best].t, peakG: round(m[best]), freefallMs: round(ffMs, 2), ffStart: ffStart, ffEnd: ffEnd, minFreefallG: round(minFF) });
+            i = skipTo(samples, best, samples[best].t + P.refractoryMs); continue;
+          }
+        }
+        i = j; continue;
+      }
+      if (m[i] >= P.impactAloneG) {
+        var b = i, z = i; while (z < n && samples[z].t - samples[i].t <= 50) { if (m[z] > m[b]) b = z; z++; }
+        events.push({ type: 'impact', tImpact: samples[b].t, peakG: round(m[b]), freefallMs: 0, ffStart: null, ffEnd: null, minFreefallG: null });
+        i = skipTo(samples, b, samples[b].t + P.refractoryMs); continue;
+      }
+      i++;
+    }
+    return events;
+  }
+  function skipTo(samples, from, t) { var i = from; while (i < samples.length && samples[i].t <= t) i++; return i; }
+
+  function stats(xs) {
+    if (!xs.length) return { mean: null, std: null };
+    var mu = xs.reduce(function (a, b) { return a + b; }, 0) / xs.length;
+    var v = xs.reduce(function (a, b) { return a + (b - mu) * (b - mu); }, 0) / xs.length;
+    return { mean: mu, std: Math.sqrt(v) };
+  }
+  function median(xs) { if (!xs.length) return null; var s = xs.slice().sort(function (a, b) { return a - b; }); var h = s.length >> 1; return s.length % 2 ? s[h] : (s[h - 1] + s[h]) / 2; }
+
+  /** DERIVED features of one event within an OBSERVED window. Deterministic. */
+  function features(samples, ev, params) {
+    var P = params || DEFAULT_PARAMS;
+    var dts = []; for (var i = 1; i < samples.length; i++) dts.push(samples[i].t - samples[i - 1].t);
+    var medDt = median(dts) || 0, maxGap = dts.length ? Math.max.apply(null, dts) : 0;
+    var ps = samples[0].t, post = samples.filter(function (s) { return s.t >= ev.tImpact + P.settleMs && s.t <= ev.tImpact + P.settleMs + P.stillWindowMs; }).map(magG);
+    var st = stats(post);
+    var rot = samples.filter(function (s) { return typeof s.rx === 'number'; }).map(function (s) { return Math.sqrt(s.rx * s.rx + s.ry * s.ry + s.rz * s.rz); });
+    var t = ev.freefallMs / 1000;
+    return {
+      eventType: ev.type,
+      tImpact: ev.tImpact,
+      tImpactOffsetMs: round(ev.tImpact - ps, 2),
+      peakG: ev.peakG,
+      freefallMs: ev.freefallMs,
+      minFreefallG: ev.minFreefallG,
+      estDropHeightM: round(0.5 * G * t * t, 3),
+      postImpactStdG: st.std == null ? null : round(st.std),
+      postImpactMeanG: st.mean == null ? null : round(st.mean),
+      postSamples: post.length,
+      cameToRest: st.std != null && post.length >= 5 && st.std <= P.stillStdG,
+      peakRotationDps: rot.length ? round(Math.max.apply(null, rot), 2) : null,
+      sampleCount: samples.length,
+      medianIntervalMs: round(medDt, 3),
+      sampleRateHz: medDt ? round(1000 / medDt, 2) : null,
+      maxGapMs: round(maxGap, 3),
+      dataGap: medDt > 0 && maxGap > P.maxGapFactor * medDt
+    };
+  }
+
+  /** INFERRED interpretation: hypothesis + confidence + competing explanations. Deterministic. */
+  function interpret(f, params) {
+    var P = params || DEFAULT_PARAMS, alts, c, hyp, why = [];
+    var still = f.cameToRest ? 1 : (f.postImpactStdG != null && f.postImpactStdG <= 3 * P.stillStdG ? 0.5 : 0);
+    var gapPen = f.dataGap ? 0.25 : 0;
+    if (f.eventType === 'drop') {
+      var ff = clamp((f.freefallMs - P.minFreefallMs) / (400 - P.minFreefallMs), 0, 1);
+      var imp = clamp((f.peakG - P.impactG) / (6 - P.impactG), 0, 1);
+      c = 0.3 + 0.25 * ff + 0.15 * imp + 0.2 * still - gapPen;
+      hyp = 'Phone fell ~' + f.estDropHeightM + ' m and struck a surface';
+      why.push('free fall ' + f.freefallMs + ' ms (|a| < ' + P.freefallG + ' g)', 'impact peak ' + f.peakG + ' g', still === 1 ? 'came to rest after impact' : 'still moving after impact');
+      alts = [
+        { label: 'Tossed and caught (no surface impact)', plausibility: round(clamp(0.15 + 0.4 * (1 - still), 0, 1), 2), why: 'caught phone keeps moving after the spike' },
+        { label: 'Placed down hard / slammed on a table', plausibility: round(clamp(0.1 + 0.4 * (1 - ff), 0, 1), 2), why: 'short free fall is consistent with a fast set-down' },
+        { label: 'Thrown or deliberate drop test', plausibility: 0.1, why: 'kinematically identical to an accidental fall' },
+        { label: 'Sensor artefact (missing samples)', plausibility: round(f.dataGap ? 0.4 : 0.05, 2), why: f.dataGap ? 'data gap of ' + f.maxGapMs + ' ms in window' : 'no data gap found' }
+      ];
+    } else {
+      var imp2 = clamp((f.peakG - P.impactAloneG) / (8 - P.impactAloneG), 0, 1);
+      c = 0.3 + 0.3 * imp2 + 0.1 * still - gapPen;
+      hyp = 'Phone was struck or knocked (no free fall)';
+      why.push('spike ' + f.peakG + ' g without preceding free fall');
+      alts = [
+        { label: 'Very short drop (< 5 cm)', plausibility: 0.3, why: 'free fall shorter than ' + P.minFreefallMs + ' ms is not detected' },
+        { label: 'Hard tap / gesture by the user', plausibility: 0.3, why: 'hand motion can exceed ' + P.impactAloneG + ' g' },
+        { label: 'Vehicle or surface jolt', plausibility: 0.2, why: 'external shock transmitted to the phone' },
+        { label: 'Sensor artefact (missing samples)', plausibility: round(f.dataGap ? 0.4 : 0.05, 2), why: f.dataGap ? 'data gap in window' : 'no data gap found' }
+      ];
+    }
+    return { hypothesis: hyp, eventType: f.eventType, confidence: round(clamp(c, 0.05, 0.95), 3), rationale: why, alternatives: alts, paramsVersion: P.version };
+  }
+
+  /** Full deterministic pipeline on one OBSERVED window. Picks the event nearest the window anchor (start + preMs). */
+  function analyzeWindow(samples, params) {
+    var P = params || DEFAULT_PARAMS;
+    if (!samples || samples.length < 3) return null;
+    var evs = detect(samples, P);
+    if (!evs.length) return null;
+    var anchor = samples[0].t + P.preMs;
+    var ev = evs.slice().sort(function (a, b) { return Math.abs(a.tImpact - anchor) - Math.abs(b.tImpact - anchor); })[0];
+    var f = features(samples, ev, P);
+    return { event: ev, features: f, interpretation: interpret(f, P) };
+  }
+
+  /** Slice the OBSERVED window for an event out of a longer stream. */
+  function windowFor(samples, tImpact, params) {
+    var P = params || DEFAULT_PARAMS;
+    return samples.filter(function (s) { return s.t >= tImpact - P.preMs && s.t <= tImpact + P.postMs; });
+  }
+
+  /** Append OBSERVED -> DERIVED -> INFERRED for one window. Returns the three entries (or null if nothing detected). */
+  function recordEvent(ledger, opts) {
+    var P = opts.params || DEFAULT_PARAMS;
+    var a = analyzeWindow(opts.samples, P);
+    if (!a) return Promise.resolve(null);
+    var obs, der;
+    return ledger.append({
+      source: opts.source || 'devicemotion', 'class': 'OBSERVED', kind: 'motion.window',
+      data: { samples: opts.samples, units: { a: 'm/s^2 incl. gravity', r: 'deg/s', t: 'ms epoch' }, context: opts.context || null, synthetic: !!opts.synthetic }
+    }).then(function (o) {
+      obs = o;
+      return ledger.append({ source: 'detector/' + P.version, 'class': 'DERIVED', kind: 'motion.features', data: { features: a.features, params: P }, provenance: [o.id], confidence: 1 });
+    }).then(function (d) {
+      der = d;
+      return ledger.append({ source: 'interpreter/' + P.version, 'class': 'INFERRED', kind: 'event.interpretation', data: a.interpretation, provenance: [d.id, obs.id], confidence: a.interpretation.confidence });
+    }).then(function (inf) { return { observed: obs, derived: der, inferred: inf }; });
+  }
+
+  /**
+   * Replay: re-run detection + interpretation from the stored OBSERVED windows alone and compare against
+   * the DERIVED / INFERRED entries recorded in the ledger. Read-only.
+   */
+  function replay(ledger, params) {
+    var results = [], entries = ledger.entries();
+    entries.filter(function (e) { return e['class'] === 'OBSERVED' && e.kind === 'motion.window'; }).forEach(function (obs) {
+      var der = entries.filter(function (e) { return e['class'] === 'DERIVED' && e.kind === 'motion.features' && e.provenance.indexOf(obs.id) >= 0; });
+      var P = (der[0] && der[0].data && der[0].data.params) || params || DEFAULT_PARAMS;
+      var fresh = analyzeWindow(clone(obs.data.samples), P);
+      var r = { observedId: obs.id, derivedId: der[0] ? der[0].id : null, inferredIds: [], match: false, problems: [] };
+      if (!der.length) r.problems.push('no DERIVED entry for this window');
+      if (!fresh) r.problems.push('replay detected no event');
+      if (der.length && fresh && canonical(fresh.features) !== canonical(der[0].data.features)) r.problems.push('features differ');
+      if (der.length) {
+        var infs = entries.filter(function (e) { return e['class'] === 'INFERRED' && e.provenance.indexOf(der[0].id) >= 0; });
+        r.inferredIds = infs.map(function (e) { return e.id; });
+        if (!infs.length) r.problems.push('no INFERRED entry for this window');
+        infs.forEach(function (inf) {
+          if (!fresh || canonical(fresh.interpretation) !== canonical(inf.data)) r.problems.push('interpretation differs for ' + inf.id);
+          else if (inf.confidence !== fresh.interpretation.confidence) r.problems.push('confidence differs for ' + inf.id);
+        });
+      }
+      r.match = r.problems.length === 0;
+      results.push(r);
+    });
+    return { checked: results.length, matched: results.filter(function (r) { return r.match; }).length, results: results };
+  }
+
+  // ---------------------------------------------------------------- synthetic traces (tests + in-app simulator)
+  function mulberry32(seed) {
+    return function () { seed |= 0; seed = (seed + 0x6D2B79F5) | 0; var t = Math.imul(seed ^ (seed >>> 15), 1 | seed); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+  }
+  function mk(t, gx, gy, gz, rnd, noise) {
+    var nz = function () { return (rnd() - 0.5) * 2 * noise; };
+    return { t: round(t, 3), ax: round(gx + nz()), ay: round(gy + nz()), az: round(gz + nz()), rx: round(nz() * 10), ry: round(nz() * 10), rz: round(nz() * 10) };
+  }
+  var synth = {
+    still: function (o) {
+      o = o || {}; var r = mulberry32(o.seed || 1), hz = o.hz || 60, n = Math.round((o.ms || 5000) * hz / 1000), t0 = o.t0 || 1.7e12, out = [];
+      for (var i = 0; i < n; i++) out.push(mk(t0 + i * 1000 / hz, 0, 0, -G, r, o.noise == null ? 0.03 : o.noise));
+      return out;
+    },
+    walk: function (o) {
+      o = o || {}; var r = mulberry32(o.seed || 2), hz = o.hz || 60, n = Math.round((o.ms || 8000) * hz / 1000), t0 = o.t0 || 1.7e12, out = [];
+      var f = o.stepHz || 1.9, amp = o.ampG == null ? 0.35 : o.ampG;
+      for (var i = 0; i < n; i++) {
+        var t = i / hz, v = amp * Math.sin(2 * Math.PI * f * t) + 0.1 * Math.sin(4 * Math.PI * f * t + 1);
+        var s = mk(t0 + i * 1000 / hz, 0.15 * G * Math.sin(Math.PI * f * t), 0.1 * G, -(1 + v) * G, r, 0.4);
+        s.rx = round(40 * Math.sin(2 * Math.PI * f * t)); out.push(s);
+      }
+      return out;
+    },
+    drop: function (o) {
+      o = o || {}; var r = mulberry32(o.seed || 3), hz = o.hz || 60, t0 = o.t0 || 1.7e12, h = o.heightM == null ? 1.0 : o.heightM;
+      var ffMs = Math.sqrt(2 * h / G) * 1000, pre = o.preMs == null ? 2000 : o.preMs, post = o.postMs == null ? 2500 : o.postMs;
+      var peak = o.peakG == null ? 5 : o.peakG, caught = !!o.caught, out = [];
+      var total = pre + ffMs + post, n = Math.round(total * hz / 1000);
+      for (var i = 0; i < n; i++) {
+        var tm = i * 1000 / hz, z, noise = 0.05;
+        if (tm < pre) z = 1;                                  // held in hand
+        else if (tm < pre + ffMs) { z = 0.05; noise = 0.02; } // free fall
+        else {
+          var dt = tm - pre - ffMs;
+          if (caught) { z = 1 + 0.6 * Math.sin(dt / 60) * Math.exp(-dt / 2000); noise = 0.6; }
+          else if (dt < 1000 / hz) z = peak;                     // impact sample
+          else if (dt < 250) { z = 1 + (peak / 3) * Math.exp(-dt / 40) * Math.cos(dt / 8); noise = 0.3; } // bounce / ringing
+          else { z = 1; noise = 0.02; }                          // at rest
+        }
+        out.push(mk(t0 + tm, 0, 0, -z * G, r, noise));
+      }
+      return out;
+    }
+  };
+
+  return {
+    VERSION: VERSION, G: G, CLASSES: CLASSES, GENESIS: GENESIS, DEFAULT_PARAMS: DEFAULT_PARAMS, DEFAULTS_BY_CLASS: DEFAULTS_BY_CLASS,
+    canonical: canonical, sha256: sha256, round: round, deepFreeze: deepFreeze,
+    firewallCheck: firewallCheck, Ledger: Ledger, MemoryStore: MemoryStore, statusOf: statusOf,
+    RingBuffer: RingBuffer, magG: magG, detect: detect, features: features, interpret: interpret,
+    analyzeWindow: analyzeWindow, windowFor: windowFor, recordEvent: recordEvent, replay: replay,
+    synth: synth, mulberry32: mulberry32
+  };
+});
+
+</script>
+<script>
+(function () {
+'use strict';
+var C = window.GenieCore, P = C.DEFAULT_PARAMS;
+var $ = function (s) { return document.querySelector(s); };
+var now = function () { return Date.now(); };
+var S = {
+  running: false, buf: new C.RingBuffer(4096), processed: {}, ledger: null, verified: {},
+  latest: {}, glyph: { state: 'idle', until: 0 }, streams: [], audio: null, timers: []
+};
+window.__genie = S; // for debugging / headless smoke test
+
+// ------------------------------------------------------------ glyph
+var GLYPH = { blue: '#3b82f6', gold: '#e8b923', white: '#f5f7fa', red: '#ef4444', grey: '#5b6370' };
+function flash(state, ms) { S.glyph = { state: state, until: now() + (ms || 2500) }; }
+function glyphColor() {
+  if (S.glyph.until > now()) return GLYPH[S.glyph.state];
+  if (!S.running) return GLYPH.grey;
+  var l = S.buf.last();
+  if (!l || now() - l.t > 3000) return GLYPH.grey; // stale: motion data stopped
+  return GLYPH.blue;
+}
+function drawOrb() {
+  var c = $('#orb'), x = c.getContext('2d'), w = c.width, col = glyphColor(), l = S.buf.last();
+  var g = l ? C.magG(l) : 1, pulse = S.running ? Math.min(1, Math.abs(g - 1)) : 0;
+  x.clearRect(0, 0, w, w);
+  x.beginPath(); x.arc(w / 2, w / 2, w * 0.3 + pulse * w * 0.12, 0, 7);
+  x.strokeStyle = col; x.lineWidth = 6; x.shadowColor = col; x.shadowBlur = 18; x.stroke();
+  x.beginPath(); x.arc(w / 2, w / 2, w * 0.1, 0, 7); x.fillStyle = col; x.fill();
+}
+function drawSpark() {
+  var c = $('#spark'), x = c.getContext('2d'), W = c.width, H = c.height;
+  var a = S.buf.toArray().slice(-360), max = 4;
+  x.clearRect(0, 0, W, H);
+  var y = function (g) { return H - Math.min(g, max) / max * H; };
+  x.strokeStyle = '#3a1a1a'; x.lineWidth = 1; x.beginPath(); x.moveTo(0, y(P.impactG)); x.lineTo(W, y(P.impactG)); x.stroke();
+  x.strokeStyle = '#1d2a40'; x.beginPath(); x.moveTo(0, y(P.freefallG)); x.lineTo(W, y(P.freefallG)); x.stroke();
+  x.strokeStyle = '#222a35'; x.beginPath(); x.moveTo(0, y(1)); x.lineTo(W, y(1)); x.stroke();
+  if (a.length < 2) return;
+  x.strokeStyle = glyphColor(); x.lineWidth = 2; x.beginPath();
+  a.forEach(function (s, i) { var px = i / 359 * W; i ? x.lineTo(px, y(C.magG(s))) : x.moveTo(px, y(C.magG(s))); });
+  x.stroke();
+}
+function frame() { drawOrb(); drawSpark(); requestAnimationFrame(frame); }
+
+function banner(msg, cls) { var b = $('#banner'); b.textContent = msg; b.className = cls || 'info'; }
+function exception(msg) { banner(msg, 'err'); flash('red', 4000); console.warn(msg); }
+
+// ------------------------------------------------------------ sensor registry
+var SENSORS = [
+  { k: 'accel', n: 'Accelerometer (DeviceMotion)' }, { k: 'gyro', n: 'Gyroscope (rotationRate)' },
+  { k: 'orient', n: 'Orientation (alpha/beta/gamma)' }, { k: 'compass', n: 'Compass (webkitCompassHeading)' },
+  { k: 'geo', n: 'Geolocation (GPS/Wi-Fi)' }, { k: 'mic', n: 'Microphone level (AnalyserNode)' },
+  { k: 'cam', n: 'Camera brightness' }, { k: 'battery', n: 'Battery (getBattery)' },
+  { k: 'screen', n: 'Screen orientation' }, { k: 'visibility', n: 'Page visibility' },
+  { k: 'network', n: 'Network (onLine / connection)' }, { k: 'touch', n: 'Touch (force on 3D Touch only)' },
+  { k: 'storage', n: 'Storage quota / persistence' }, { k: 'clock', n: 'High-res clock' },
+  { k: 'ambient', n: 'Ambient light sensor API' }, { k: 'magneto', n: 'Magnetometer (Generic Sensor)' },
+  { k: 'baro', n: 'Barometer / altimeter' }, { k: 'prox', n: 'Proximity' },
+  { k: 'vibrate', n: 'Vibration (actuator)' }, { k: 'nfc', n: 'Web NFC' }, { k: 'bt', n: 'Web Bluetooth' }
+];
+var ST = {}; // k -> {status, val, t}
+function setS(k, status, val) { var o = ST[k] || (ST[k] = {}); if (status) o.status = status; if (val !== undefined) { o.val = val; o.t = now(); } }
+function probe() {
+  var w = window, n = navigator;
+  var dm = 'DeviceMotionEvent' in w, dorient = 'DeviceOrientationEvent' in w;
+  setS('accel', dm ? 'available' : 'unsupported'); setS('gyro', dm ? 'available' : 'unsupported');
+  setS('orient', dorient ? 'available' : 'unsupported'); setS('compass', dorient ? 'available' : 'unsupported');
+  setS('geo', 'geolocation' in n ? 'available' : 'unsupported');
+  var gum = !!(n.mediaDevices && n.mediaDevices.getUserMedia);
+  setS('mic', gum && (w.AudioContext || w.webkitAudioContext) ? 'available' : 'unsupported'); setS('cam', gum ? 'available' : 'unsupported');
+  setS('battery', n.getBattery ? 'available' : 'unsupported');
+  setS('screen', screen.orientation ? 'active' : 'unsupported', screen.orientation ? screen.orientation.type : undefined);
+  setS('visibility', 'active', document.visibilityState);
+  setS('network', 'active', (n.onLine ? 'online' : 'offline') + (n.connection && n.connection.effectiveType ? ' · ' + n.connection.effectiveType : ''));
+  setS('touch', 'ontouchstart' in w ? 'available' : 'unsupported');
+  setS('storage', n.storage && n.storage.estimate ? 'available' : 'unsupported');
+  setS('clock', 'active', 'performance.now');
+  setS('ambient', 'AmbientLightSensor' in w ? 'available' : 'unsupported');
+  setS('magneto', 'Magnetometer' in w ? 'available' : 'unsupported');
+  setS('baro', 'unsupported'); // no web API exists
+  setS('prox', 'ondeviceproximity' in w ? 'available' : 'unsupported');
+  setS('vibrate', n.vibrate ? 'available' : 'unsupported');
+  setS('nfc', 'NDEFReader' in w ? 'available' : 'unsupported');
+  setS('bt', n.bluetooth ? 'available' : 'unsupported');
+  if (!isSecureContext) ['accel', 'gyro', 'orient', 'compass', 'geo', 'mic', 'cam'].forEach(function (k) { setS(k, 'error', 'needs HTTPS'); });
+  document.addEventListener('visibilitychange', function () { setS('visibility', 'active', document.visibilityState); });
+  addEventListener('online', function () { setS('network', 'active', 'online'); });
+  addEventListener('offline', function () { setS('network', 'active', 'offline'); });
+  addEventListener('touchstart', function (e) { var f = e.touches[0] && e.touches[0].force; setS('touch', 'active', 'force ' + (f == null ? 'n/a' : f.toFixed(2))); }, { passive: true });
+  if (screen.orientation) screen.orientation.addEventListener('change', function () { setS('screen', 'active', screen.orientation.type); });
+}
+function renderSensors() {
+  var t = now();
+  $('#sensors').innerHTML = SENSORS.map(function (s) {
+    var o = ST[s.k] || { status: 'unsupported' }, st = o.status;
+    if (st === 'active' && o.t && t - o.t > 3000 && ['accel', 'gyro', 'orient', 'compass', 'mic', 'cam'].indexOf(s.k) >= 0) st = 'stale';
+    var label = { active: 'active', available: 'not started', denied: 'denied', unsupported: 'unsupported', error: 'error', stale: 'stale' }[st];
+    return '<li class="s st-' + st + '" data-k="' + s.k + '" data-status="' + st + '"><span class="dot"></span><span class="name">' + s.n +
+      '</span><span class="val">' + esc(o.val != null && st !== 'unsupported' ? String(o.val) : label) + '</span></li>';
+  }).join('');
+}
+function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+
+// ------------------------------------------------------------ sensor handlers
+function tsOf(e) { return C.round(performance.timeOrigin + (e && e.timeStamp ? e.timeStamp : performance.now()), 3); }
+function onMotion(e) {
+  var g = e.accelerationIncludingGravity; if (!g || g.x == null) return;
+  var r = e.rotationRate || {};
+  var s = { t: tsOf(e), ax: C.round(g.x), ay: C.round(g.y), az: C.round(g.z) };
+  if (r.alpha != null) { s.rx = C.round(r.alpha); s.ry = C.round(r.beta); s.rz = C.round(r.gamma); setS('gyro', 'active', Math.hypot(s.rx, s.ry, s.rz).toFixed(0) + ' °/s'); }
+  var last = S.buf.last(); if (last && s.t <= last.t) return; // keep strictly increasing timestamps
+  S.buf.push(s);
+  var mg = C.magG(s); S.latest.g = mg;
+  setS('accel', 'active', mg.toFixed(2) + ' g · ' + (e.interval ? Math.round(1000 / (e.interval > 1 ? e.interval : e.interval * 1000)) + ' Hz' : ''));
+}
+function onOrient(e) {
+  if (e.alpha == null && e.webkitCompassHeading == null) return;
+  setS('orient', 'active', [e.alpha, e.beta, e.gamma].map(function (v) { return v == null ? '–' : Math.round(v); }).join('/'));
+  if (e.webkitCompassHeading != null) {
+    S.latest.heading = { deg: C.round(e.webkitCompassHeading, 1), acc: e.webkitCompassAccuracy, t: tsOf(e) };
+    setS('compass', 'active', Math.round(e.webkitCompassHeading) + '° ±' + Math.round(e.webkitCompassAccuracy));
+  } else if (e.absolute && e.alpha != null) {
+    S.latest.heading = { deg: C.round((360 - e.alpha) % 360, 1), acc: null, t: tsOf(e) };
+    setS('compass', 'active', Math.round(S.latest.heading.deg) + '° (absolute alpha)');
+  } else if (ST.compass.status !== 'active') setS('compass', 'available', 'no heading field');
+}
+
+function startMotion(permMotion, permOrient) {
+  return Promise.all([permMotion, permOrient]).then(function (res) {
+    var m = res[0], o = res[1];
+    if (m === 'granted') { addEventListener('devicemotion', onMotion); setS('accel', 'active', 'waiting…'); setS('gyro', 'active', 'waiting…'); }
+    else { setS('accel', 'denied', m); setS('gyro', 'denied', m); }
+    if (o === 'granted') { addEventListener('deviceorientation', onOrient); setS('orient', 'active', 'waiting…'); setS('compass', 'active', 'waiting…'); }
+    else { setS('orient', 'denied', o); setS('compass', 'denied', o); }
+  });
+}
+function askPerm(Ctor) {
+  if (!Ctor) return Promise.resolve('unsupported');
+  if (typeof Ctor.requestPermission !== 'function') return Promise.resolve('granted'); // non-iOS
+  try { return Ctor.requestPermission().catch(function (e) { return 'error: ' + e.message; }); }
+  catch (e) { return Promise.resolve('error: ' + e.message); }
+}
+function startGeo() {
+  if (!navigator.geolocation) return;
+  var id = navigator.geolocation.watchPosition(function (p) {
+    var c = p.coords;
+    S.latest.geo = { lat: C.round(c.latitude, 6), lon: C.round(c.longitude, 6), acc: C.round(c.accuracy, 1), alt: c.altitude, speed: c.speed, t: p.timestamp };
+    setS('geo', 'active', '±' + Math.round(c.accuracy) + ' m');
+  }, function (err) { setS('geo', err.code === 1 ? 'denied' : 'error', err.message || ('code ' + err.code)); },
+  { enableHighAccuracy: true, maximumAge: 5000, timeout: 30000 });
+  S.timers.push(function () { navigator.geolocation.clearWatch(id); });
+}
+function startMic(ctx) {
+  return navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } }).then(function (st) {
+    S.streams.push(st);
+    var src = ctx.createMediaStreamSource(st), an = ctx.createAnalyser(); an.fftSize = 2048; src.connect(an);
+    var buf = new Float32Array(an.fftSize);
+    var iv = setInterval(function () {
+      an.getFloatTimeDomainData(buf);
+      var sum = 0; for (var i = 0; i < buf.length; i++) sum += buf[i] * buf[i];
+      var db = 20 * Math.log10(Math.sqrt(sum / buf.length) || 1e-9);
+      S.latest.dbfs = { v: C.round(Math.max(db, -120), 1), t: now() };
+      setS('mic', 'active', S.latest.dbfs.v + ' dBFS');
+    }, 100);
+    S.timers.push(function () { clearInterval(iv); });
+  }).catch(function (e) { setS('mic', /denied|NotAllowed/i.test(e.name + e.message) ? 'denied' : 'error', e.name); });
+}
+function startCam() {
+  return navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment', width: 320, height: 240 } }).then(function (st) {
+    S.streams.push(st);
+    var v = $('#cam'); v.srcObject = st; v.play && v.play().catch(function () {});
+    var cv = document.createElement('canvas'); cv.width = 32; cv.height = 24; var cx = cv.getContext('2d', { willReadFrequently: true });
+    var iv = setInterval(function () {
+      if (v.readyState < 2) return;
+      cx.drawImage(v, 0, 0, 32, 24);
+      var d = cx.getImageData(0, 0, 32, 24).data, s = 0;
+      for (var i = 0; i < d.length; i += 4) s += 0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2];
+      S.latest.brightness = { v: C.round(s / (d.length / 4), 1), t: now() };
+      setS('cam', 'active', S.latest.brightness.v + ' / 255 luma');
+    }, 500);
+    S.timers.push(function () { clearInterval(iv); });
+  }).catch(function (e) { setS('cam', /denied|NotAllowed/i.test(e.name + e.message) ? 'denied' : 'error', e.name); });
+}
+function startBattery() {
+  if (!navigator.getBattery) return;
+  navigator.getBattery().then(function (b) {
+    var u = function () { S.latest.battery = { level: b.level, charging: b.charging }; setS('battery', 'active', Math.round(b.level * 100) + '%' + (b.charging ? ' ⚡' : '')); };
+    u(); b.addEventListener('levelchange', u); b.addEventListener('chargingchange', u);
+  }).catch(function (e) { setS('battery', 'error', e.name); });
+}
+function startStorage() {
+  var n = navigator;
+  if (!n.storage || !n.storage.estimate) return;
+  Promise.all([n.storage.persist ? n.storage.persist() : Promise.resolve(false), n.storage.estimate()]).then(function (r) {
+    setS('storage', 'active', (r[0] ? 'persistent · ' : 'best-effort · ') + Math.round((r[1].usage || 0) / 1024) + ' KB used');
+  }).catch(function () {});
+}
+
+/** Wake: MUST run synchronously inside the tap handler so iOS accepts requestPermission(). */
+function wake() {
+  if (S.running) return sleep();
+  // 1. iOS permission prompts first, synchronously in the gesture.
+  var pm = askPerm(window.DeviceMotionEvent), po = askPerm(window.DeviceOrientationEvent);
+  // 2. AudioContext must also be created/resumed inside the gesture.
+  var AC = window.AudioContext || window.webkitAudioContext, ctx = null;
+  if (AC && ST.mic.status !== 'unsupported') { try { ctx = new AC(); ctx.resume(); S.audio = ctx; } catch (e) { setS('mic', 'error', e.message); } }
+  S.running = true; $('#wake').textContent = 'Sleep'; $('#mode').textContent = 'sensing · nothing leaves this device';
+  banner('Sensing. Drop the phone onto a bed or sofa to test, or tap “Simulate drop”.', 'info');
+  startMotion(pm, po).then(function () {
+    startGeo(); startBattery(); startStorage();
+    var chain = Promise.resolve();
+    if (ctx) chain = chain.then(function () { return startMic(ctx); });
+    if (ST.cam.status !== 'unsupported' && ST.cam.status !== 'error') chain = chain.then(startCam);
+    return chain;
+  }).catch(function (e) { exception('Wake failed: ' + e.message); });
+  var iv = setInterval(detectTick, 250); S.timers.push(function () { clearInterval(iv); });
+}
+function sleep() {
+  S.running = false;
+  removeEventListener('devicemotion', onMotion); removeEventListener('deviceorientation', onOrient);
+  S.timers.forEach(function (f) { f(); }); S.timers = [];
+  S.streams.forEach(function (st) { st.getTracks().forEach(function (t) { t.stop(); }); }); S.streams = [];
+  if (S.audio) { S.audio.close(); S.audio = null; }
+  SENSORS.forEach(function (s) { if (ST[s.k] && ST[s.k].status === 'active' && ['accel', 'gyro', 'orient', 'compass', 'geo', 'mic', 'cam'].indexOf(s.k) >= 0) setS(s.k, 'available', 'stopped'); });
+  $('#wake').textContent = 'Wake sensors'; $('#mode').textContent = 'idle · nothing leaves this device';
+}
+
+// ------------------------------------------------------------ context snapshot (synchronized, with ages)
+function context() {
+  var t = now(), age = function (x) { return x && x.t ? Math.round(t - x.t) : null; }, L = S.latest;
+  return {
+    capturedAt: t,
+    headingDeg: L.heading ? L.heading.deg : null, headingAccDeg: L.heading ? L.heading.acc : null, headingAgeMs: L.heading ? Math.round(t - L.heading.t) : null,
+    soundDbfs: L.dbfs ? L.dbfs.v : null, soundAgeMs: age(L.dbfs),
+    brightness: L.brightness ? L.brightness.v : null, brightnessAgeMs: age(L.brightness),
+    geo: L.geo ? { lat: L.geo.lat, lon: L.geo.lon, accM: L.geo.acc } : null, geoAgeMs: L.geo ? Math.round(t - L.geo.t) : null,
+    battery: L.battery || null, visibility: document.visibilityState, online: navigator.onLine
+  };
+}
+
+// ------------------------------------------------------------ detection loop
+var busy = false;
+function detectTick() {
+  if (busy || !S.ledger) return;
+  var samples = S.buf.toArray(); if (samples.length < 10) return;
+  var lastT = samples[samples.length - 1].t;
+  var evs = C.detect(samples, P).filter(function (ev) { return ev.tImpact <= lastT - P.postMs && !S.processed[Math.round(ev.tImpact)]; });
+  if (!evs.length) return;
+  busy = true;
+  var chain = Promise.resolve();
+  evs.forEach(function (ev) {
+    S.processed[Math.round(ev.tImpact)] = 1;
+    chain = chain.then(function () { return record(C.windowFor(samples, ev.tImpact, P), 'devicemotion', false); });
+  });
+  chain.then(function () { busy = false; }, function (e) { busy = false; exception(e.message); });
+}
+function record(samples, source, synthetic) {
+  flash('white', 2500);
+  return C.recordEvent(S.ledger, { samples: samples, source: source, synthetic: synthetic, context: context(), params: P }).then(function (r) {
+    if (!r) { banner('Window analysed, no event confirmed.', 'info'); return; }
+    var i = r.inferred.data;
+    banner('Event: ' + i.hypothesis + ' (' + Math.round(i.confidence * 100) + '%)' + (synthetic ? ' [simulated]' : ''), 'attn');
+    if (navigator.vibrate) navigator.vibrate(80);
+    showInterp(r);
+    // immediate self-check: replay this window from OBSERVED alone
+    var rep = C.replay(S.ledger).results.filter(function (x) { return x.observedId === r.observed.id; })[0];
+    if (rep && rep.match) { markVerified(rep); setTimeout(function () { flash('gold', 2500); }, 1200); }
+    renderLedger();
+  }).catch(function (e) { exception(e.message); renderLedger(); });
+}
+function showInterp(r) {
+  var i = r.inferred.data, f = r.derived.data.features;
+  $('#last').hidden = false;
+  $('#interp').innerHTML =
+    '<div class="h">' + esc(i.hypothesis) + '<span class="conf" style="width:' + Math.round(i.confidence * 60) + 'px"></span> ' + Math.round(i.confidence * 100) + '%</div>' +
+    '<div><span class="tag c-OBSERVED">OBSERVED</span> ' + f.sampleCount + ' samples @ ' + f.sampleRateHz + ' Hz (' + r.observed.id + ')' + (r.observed.data.synthetic ? ' · simulated' : '') + '</div>' +
+    '<div><span class="tag c-DERIVED">DERIVED</span> peak ' + f.peakG + ' g · free fall ' + f.freefallMs + ' ms · ~' + f.estDropHeightM + ' m · ' + (f.cameToRest ? 'came to rest' : 'kept moving') + (f.dataGap ? ' · DATA GAP' : '') + '</div>' +
+    '<div><span class="tag c-INFERRED">INFERRED</span> ' + esc(i.rationale.join('; ')) + '</div>' +
+    '<div class="alt">Competing: ' + i.alternatives.map(function (a) { return esc(a.label) + ' (' + a.plausibility + ')'; }).join(' · ') + '</div>';
+}
+function markVerified(rep) { [rep.observedId, rep.derivedId].concat(rep.inferredIds).forEach(function (id) { if (id) S.verified[id] = 1; }); }
+
+// ------------------------------------------------------------ ledger UI
+function summary(e) {
+  var d = e.data || {};
+  if (e.kind === 'motion.window') return d.samples.length + ' samples' + (d.synthetic ? ' (simulated)' : '');
+  if (e.kind === 'motion.features') return 'peak ' + d.features.peakG + ' g · ff ' + d.features.freefallMs + ' ms';
+  if (e.kind === 'event.interpretation') return d.hypothesis + ' · ' + Math.round(e.confidence * 100) + '%';
+  if (e.kind === 'sensor.snapshot') return 'snapshot · ' + Object.keys(d).filter(function (k) { return d[k] != null; }).length + ' fields';
+  return e.kind;
+}
+function renderLedger() {
+  var L = S.ledger; if (!L) return;
+  $('#lcount').textContent = L.size; $('#lhead').textContent = L.head.slice(0, 10);
+  var t = now();
+  $('#ledger').innerHTML = L.entries().slice(-40).reverse().map(function (e) {
+    var st = L.status(e, t), shown = e.kind === 'motion.window' ? Object.assign({}, e, { data: Object.assign({}, e.data, { samples: '[' + e.data.samples.length + ' samples]' }) }) : e;
+    return '<details class="e ' + st + (S.verified[e.id] ? ' verified' : '') + '" data-id="' + e.id + '" data-class="' + e['class'] + '"><summary><span class="tag c-' + e['class'] + '">' + e['class'] +
+      '</span><span class="sum">' + esc(summary(e)) + '</span><small>' + st + '</small></summary><pre>' + esc(JSON.stringify(shown, null, 1)) + '</pre></details>';
+  }).join('');
+}
+
+// ------------------------------------------------------------ IndexedDB store (same shape as C.MemoryStore)
+function IDBStore(name) { this.name = name; this.db = null; }
+IDBStore.prototype.open = function () {
+  var self = this;
+  return new Promise(function (res, rej) {
+    var r = indexedDB.open(self.name, 1);
+    r.onupgradeneeded = function () { r.result.createObjectStore('ledger', { keyPath: 'seq' }); };
+    r.onsuccess = function () { self.db = r.result; res(self); }; r.onerror = function () { rej(r.error); };
+  });
+};
+IDBStore.prototype._tx = function (mode, fn) {
+  var self = this;
+  return new Promise(function (res, rej) {
+    var tx = self.db.transaction('ledger', mode), os = tx.objectStore('ledger'), out;
+    var rq = fn(os); if (rq) rq.onsuccess = function () { out = rq.result; };
+    tx.oncomplete = function () { res(out); }; tx.onerror = function () { rej(tx.error); }; tx.onabort = function () { rej(tx.error); };
+  });
+};
+IDBStore.prototype.add = function (e) { return this._tx('readwrite', function (os) { return os.add(JSON.parse(JSON.stringify(e))); }); }; // add() refuses overwrite
+IDBStore.prototype.all = function () { return this._tx('readonly', function (os) { return os.getAll(); }); };
+IDBStore.prototype.clear = function () { return this._tx('readwrite', function (os) { return os.clear(); }); };
+IDBStore.prototype.count = function () { return this._tx('readonly', function (os) { return os.count(); }); };
+
+// ------------------------------------------------------------ buttons
+function download(name, obj) {
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(obj, null, 1)], { type: 'application/json' }));
+  a.download = name; document.body.appendChild(a); a.click(); setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+}
+function bind() {
+  $('#wake').addEventListener('click', wake);
+  $('#snap').addEventListener('click', function () {
+    var c = context(), l = S.buf.last();
+    c.motion = l ? { ax: l.ax, ay: l.ay, az: l.az, g: C.round(C.magG(l)), ageMs: Math.round(now() - l.t) } : null;
+    S.ledger.append({ source: 'snapshot', 'class': 'OBSERVED', kind: 'sensor.snapshot', data: c })
+      .then(function () { banner('Snapshot stored as OBSERVED.', 'info'); renderLedger(); }, function (e) { exception(e.message); });
+  });
+  $('#sim').addEventListener('click', function () {
+    var tr = C.synth.drop({ t0: now() - 4000, heightM: 0.5 + Math.random() * 0.8, seed: (Math.random() * 1e9) | 0, preMs: 1500, postMs: 1500 });
+    // simulated samples are NOT pushed into the live buffer (would be re-detected as real motion)
+    var ev = C.detect(tr, P)[0];
+    record(C.windowFor(tr, ev.tImpact, P), 'simulator', true);
+  });
+  $('#replay').addEventListener('click', function () {
+    var r = C.replay(S.ledger);
+    r.results.forEach(function (x) { if (x.match) markVerified(x); });
+    if (!r.checked) banner('Nothing to replay yet.', 'info');
+    else if (r.matched === r.checked) { banner('Replay: ' + r.matched + '/' + r.checked + ' windows reproduce the stored DERIVED + INFERRED entries exactly.', 'ok'); flash('gold', 3000); }
+    else exception('Replay mismatch: ' + (r.checked - r.matched) + '/' + r.checked + ' — ' + r.results.filter(function (x) { return !x.match; }).map(function (x) { return x.observedId + ': ' + x.problems.join(', '); }).join(' | '));
+    S.lastReplay = r; renderLedger();
+  });
+  $('#verify').addEventListener('click', function () {
+    var v = S.ledger.verify();
+    S.ledger.store.count().then(function (n) {
+      if (v.ok && n === S.ledger.size) { banner('Chain OK: ' + v.count + ' entries, hashes + firewall + provenance re-verified; IndexedDB holds ' + n + '.', 'ok'); flash('gold', 2500); }
+      else exception('Chain check failed: ' + (v.error || ('IndexedDB has ' + n + ' vs memory ' + S.ledger.size)));
+    });
+  });
+  $('#fw').addEventListener('click', function () {
+    var L = S.ledger, obs = L.byClass('OBSERVED')[0], inf = L.byClass('INFERRED')[0];
+    var attempts = [
+      ['INFERRED with no provenance', { source: 'test', 'class': 'INFERRED', kind: 'fw.test', data: { alternatives: ['x'] }, confidence: 0.9 }],
+      ['OBSERVED derived from something', { source: 'test', 'class': 'OBSERVED', kind: 'fw.test', provenance: obs ? [obs.id] : ['missing'] }],
+      ['Upgrade INFERRED -> OBSERVED', { source: 'test', 'class': 'OBSERVED', kind: 'fw.test', supersedes: inf ? inf.id : 'missing' }],
+      ['DERIVED citing an INFERRED', { source: 'test', 'class': 'DERIVED', kind: 'fw.test', provenance: inf ? [inf.id] : ['missing'] }]
+    ];
+    Promise.all(attempts.map(function (a) { return L.append(a[1]).then(function () { return a[0] + ': ACCEPTED (bug!)'; }, function (e) { return a[0] + ': blocked ' + (e.rule || e.name); }); }))
+      .then(function (r) { var bad = r.some(function (x) { return /ACCEPTED/.test(x); }); (bad ? exception : function (m) { banner(m, 'err'); flash('red', 2500); })('Firewall test → ' + r.join(' · ')); renderLedger(); });
+  });
+  $('#export').addEventListener('click', function () { download('axis-genie-ledger-' + new Date().toISOString().replace(/[:.]/g, '-') + '.json', S.ledger.exportJSON()); banner('Exported ' + S.ledger.size + ' entries (file stays on this device unless you share it).', 'info'); });
+  $('#importBtn').addEventListener('click', function () { $('#import').click(); });
+  $('#import').addEventListener('change', function (ev) {
+    var f = ev.target.files[0]; ev.target.value = ''; if (!f) return;
+    f.text().then(function (txt) { return importJSON(JSON.parse(txt)); }).catch(function (e) { exception('Import rejected: ' + e.message); });
+  });
+  $('#wipe').addEventListener('click', function () {
+    if (!confirm('Delete all ' + S.ledger.size + ' ledger entries from this device? This cannot be undone.')) return;
+    S.ledger.wipe().then(function (r) {
+      S.verified = {}; S.processed = {};
+      try { localStorage.setItem('genie.lastDeletion', JSON.stringify(r)); } catch (e) {}
+      showReceipt(r); renderLedger(); $('#last').hidden = true;
+      r.verified ? banner('Deleted ' + r.deletedCount + ' entries; IndexedDB re-counted: ' + r.postCount + '.', 'ok') : exception('Deletion NOT verified: ' + r.postCount + ' rows remain');
+    }).catch(function (e) { exception(e.message); });
+  });
+}
+function importJSON(obj) {
+  if (!obj || obj.format !== 'axis-genie-ledger' || !Array.isArray(obj.entries)) throw new Error('not an axis-genie-ledger file');
+  if (S.ledger.size) throw new Error('ledger is not empty; export + delete first (append-only: import never merges or overwrites)');
+  return S.ledger.loadVerified(obj.entries, true).then(function (n) {
+    if (obj.head && obj.head !== S.ledger.head) throw new Error('head hash mismatch');
+    banner('Imported ' + n + ' entries; every hash, link and firewall rule re-verified.', 'ok'); flash('gold', 2500); renderLedger();
+  });
+}
+function showReceipt(r) { $('#receipt').textContent = r ? 'Last deletion: ' + new Date(r.at).toLocaleString() + ' · ' + r.deletedCount + ' entries · head ' + r.headBefore.slice(0, 10) + ' · post-count ' + r.postCount + ' · receipt ' + r.receiptHash.slice(0, 12) : ''; }
+
+// ------------------------------------------------------------ boot
+function boot() {
+  $('#ver').textContent = C.VERSION; $('#pff').textContent = P.freefallG + ' g'; $('#pim').textContent = P.impactG + ' g';
+  probe(); bind(); frame();
+  setInterval(function () { renderSensors(); var l = S.buf.last(); $('#r-g').textContent = l ? C.magG(l).toFixed(2) : '–';
+    $('#r-h').textContent = S.latest.heading ? Math.round(S.latest.heading.deg) + '°' : '–';
+    $('#r-db').textContent = S.latest.dbfs ? S.latest.dbfs.v : '–';
+    $('#r-lux').textContent = S.latest.brightness ? S.latest.brightness.v : '–';
+    $('#r-geo').textContent = S.latest.geo ? '±' + Math.round(S.latest.geo.acc) + 'm' : '–';
+    $('#r-buf').textContent = S.buf.length; }, 250);
+  setInterval(renderLedger, 5000); // freshness ageing (stale/expired) without new entries
+  try { showReceipt(JSON.parse(localStorage.getItem('genie.lastDeletion'))); } catch (e) {}
+  var store = new IDBStore('axis-genie');
+  store.open().then(function () {
+    S.ledger = new C.Ledger({ store: store });
+    return S.ledger.boot();
+  }).then(function (n) { renderLedger(); if (n) banner('Ledger loaded and re-verified: ' + n + ' entries.', 'info'); })
+    .catch(function (e) {
+      exception('Ledger failed verification at boot: ' + e.message + '. Stored data was NOT loaded; export it from devtools or delete.');
+      if (!S.ledger) S.ledger = new C.Ledger({ store: new C.MemoryStore() });
+    });
+  if ('serviceWorker' in navigator && isSecureContext) navigator.serviceWorker.register('sw.js').catch(function () {});
+}
+boot();
+})();
+</script>
+</body>
+</html>
